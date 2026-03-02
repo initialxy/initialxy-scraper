@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView } from 'electron';
+import { app, BaseWindow, WebContentsView, nativeTheme } from 'electron';
 import path from 'node:path';
 
 const urlArg = process.argv.find((arg) => arg.startsWith('http')) ?? undefined;
@@ -21,42 +21,6 @@ function createWindow(): void {
   });
 
   win.contentView.addChildView(webView);
-
-  // Inject dark theme CSS for scrollbars
-  const darkThemeCSS = `
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #1a1a1a;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #4a4a4a;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #6a6a6a;
-    }
-    [data-color-scheme="dark"] {
-      color-scheme: dark;
-    }
-    [data-color-scheme="light"] {
-      color-scheme: light;
-    }
-  `;
-
-  const injectDarkTheme = (webContents: Electron.WebContents) => {
-    webContents.executeJavaScript(`
-      const style = document.createElement('style');
-      style.textContent = ${JSON.stringify(darkThemeCSS)};
-      (document.head || document.documentElement).appendChild(style);
-    `);
-  };
-
-  webView.webContents.once('did-finish-load', () => {
-    injectDarkTheme(webView.webContents);
-  });
 
   // Load URL in the web view
   if (urlArg) {
@@ -81,9 +45,6 @@ function createWindow(): void {
     path.dirname(new URL(import.meta.url).pathname),
     '../renderer/ui-panel.html'
   );
-  uiView.webContents.once('did-finish-load', () => {
-    injectDarkTheme(uiView.webContents);
-  });
   uiView.webContents.loadFile(uiPath);
 
   // Set bounds after window is shown (BaseWindow doesn't have ready-to-show)
@@ -105,6 +66,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Force dark mode theme
+  nativeTheme.themeSource = 'dark';
+
   createWindow();
 
   app.on('activate', () => {
