@@ -6,19 +6,21 @@ import {
   ipcMain,
   clipboard,
   globalShortcut,
+  protocol,
 } from 'electron';
 import type { WebContents } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { parseCLIArgs } from '../shared/cli.ts';
 import { AutomationManager } from '../shared/automation.ts';
+import { ProtocolHandler } from '../shared/protocol.ts';
 import { extractSourceUrls, normalizeUrl } from '../shared/utils.ts';
 import type { CLIArgs } from '../shared/types.ts';
 
 let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
 
-function createWindow(cliArgs: CLIArgs): BaseWindow {
+function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: ProtocolHandler } {
   // Create a BaseWindow (not BrowserWindow) for multi-view support
   const win = new BaseWindow({
     width: 1200,
@@ -166,7 +168,27 @@ function createWindow(cliArgs: CLIArgs): BaseWindow {
     };
   });
 
-  return win;
+  let protocolHandler: ProtocolHandler | undefined;
+
+  if (cliArgs.outputDir) {
+    const sourceUrls = new Set<string>();
+    const completedSourceUrls = new Set<string>();
+
+    protocolHandler = new ProtocolHandler({
+      outputDir: cliArgs.outputDir,
+      filter: cliArgs.filter,
+      selector: cliArgs.selector,
+      renameSequence: cliArgs.renameSequence,
+      uiView,
+      webView,
+      sourceUrls,
+      completedSourceUrls,
+    });
+
+    protocolHandler.register();
+  }
+
+  return { win, protocolHandler };
 }
 
 app.whenReady().then(async () => {
@@ -182,7 +204,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
 
   const cliArgs = parseCLIArgs();
-  const win = createWindow(cliArgs);
+  const { win, protocolHandler } = createWindow(cliArgs);
 
   // Initialize automation manager after window is created
   if (webView?.webContents) {
