@@ -2,7 +2,7 @@
 
 This document tracks development progress and technical decisions. It is **optimized for LLM context** - concise, relevant, and actionable. Irrelevant history is cleaned up.
 
-**Version**: 2.0.0
+**Version**: 2.1.0
 **Electron**: 40.6.1
 **Node**: 18.x+
 **TypeScript**: 5.9.3 (native Node.js support)
@@ -11,7 +11,7 @@ This document tracks development progress and technical decisions. It is **optim
 
 ## Architecture
 
-### Current Implementation: BaseWindow + Dual WebContentsView
+### Current Implementation: BaseWindow + Dual WebContentsView + Shared Modules
 
 ```
 BaseWindow (1200x800, autoHideMenuBar: true)
@@ -28,9 +28,16 @@ BaseWindow (1200x800, autoHideMenuBar: true)
         ├─ nativeTheme.themeSource = 'dark'
         ├─ app.setPath('userData', './userdata/') - User data directory
         ├─ globalShortcut - Alt+Left/Right for back/forward
-        ├─ session.webRequest.* - Network monitoring
         ├─ protocol.handle() - Response body capture (when --output)
-        └─ IPC - Main ↔ Renderer communication
+        ├─ IPC - Main ↔ Renderer communication
+        └─ Shared Modules (src/shared/)
+            ├─ types.ts - Shared TypeScript interfaces
+            ├─ constants.ts - IPC channel constants
+            ├─ utils.ts - Utility functions
+            ├─ protocol.ts - ProtocolHandler class
+            ├─ cli.ts - CLI argument parsing
+            ├─ network-monitor.ts - NetworkMonitor class
+            └─ automation.ts - AutomationManager class
 ```
 
 **Why BaseWindow + WebContentsView?**
@@ -39,6 +46,13 @@ BaseWindow (1200x800, autoHideMenuBar: true)
 - Direct Chromium Views API integration
 - Proper multi-view support in single window
 - Both views fully isolated with separate webContents
+
+**Why Shared Modules?**
+
+- Eliminates code duplication across main process
+- Provides type-safe abstractions for common operations
+- Enables easier testing and maintenance
+- Centralizes protocol handling, CLI parsing, and automation logic
 
 **Key Implementation Details**:
 
@@ -47,44 +61,7 @@ BaseWindow (1200x800, autoHideMenuBar: true)
 - Each WebContentsView has independent session/webContents
 - Dark mode via `nativeTheme.themeSource = 'dark'` (not CSS injection)
 - User data stored in `./userdata/` directory (relative to executable)
-
----
-
-## Architecture
-
-### Current Implementation: BaseWindow + Dual WebContentsView
-
-```
-BaseWindow (1200x800, autoHideMenuBar: true)
-    │
-    ├─ contentView (View container)
-    │   │
-    │   ├─ WebContentsView (left, dynamic width) - Web browser
-    │   │   └─ webContents - loads external URLs
-    │   │
-    │   └─ WebContentsView (right, 500px fixed) - UI panel
-    │       └─ webContents - loads local HTML
-    │
-    └─ Main Process
-        ├─ nativeTheme.themeSource = 'dark'
-        ├─ session.webRequest.* - Network monitoring
-        ├─ protocol.handle() - Response body capture (when --output)
-        └─ IPC - Main ↔ Renderer communication
-```
-
-**Why BaseWindow + WebContentsView?**
-
-- Modern Electron 30+ API (replaces deprecated BrowserView)
-- Direct Chromium Views API integration
-- Proper multi-view support in single window
-- Both views fully isolated with separate webContents
-
-**Key Implementation Details**:
-
-- `setBounds()` called on `show` event (BaseWindow has no `ready-to-show`)
-- Left panel resizes dynamically, right panel stays fixed at 500px
-- Each WebContentsView has independent session/webContents
-- Dark mode via `nativeTheme.themeSource = 'dark'` (not CSS injection)
+- TypeScript 5.9.3 with `verbatimModuleSyntax: true` (requires `.js` extensions in imports)
 
 ---
 
@@ -100,97 +77,24 @@ BaseWindow (1200x800, autoHideMenuBar: true)
 2. **Network monitoring** - Emit events to UI panel for real-time request tracking
 3. **Request forwarding** - Forward requests unchanged to preserve page behavior
 
+**Implementation**: Centralized in `src/shared/protocol.ts` as `ProtocolHandler` class
+
 **Pattern**:
 
 ```typescript
-import { protocol, session } from 'electron';
-import fs from 'node:fs';
+import { ProtocolHandler } from './shared/protocol.js';
 
-// Create bypass session to prevent infinite recursion
-const bypassSession = session.fromPartition('persist:bypass');
-const processingUrls = new Set<string>();
-const activeRequests = new Map<
-  string,
-  { id: number; url: string; method: string; headers: Record<string, string> }
->();
-let requestIdCounter = 0;
-
-// Send network events to UI panel
-function sendNetworkEvent(
-  eventType: 'start' | 'complete',
-  requestId: number,
-  url: string,
-  method: string,
-  headers: Record<string, string>,
-  statusCode?: number
-) {
-  if (!uiView) return;
-  uiView.webContents.send(`network-request-${eventType}`, {
-    id: requestId,
-    url,
-    method,
-    headers,
-    statusCode,
-  });
-}
-
-app.whenReady().then(() => {
-  protocol.handle('https', async (request) => {
-    const url = request.url;
-    const headersObj = Object.fromEntries(request.headers.entries());
-
-    // Prevent infinite recursion
-    if (processingUrls.has(url)) {
-      const response = await fetch(url, { method: request.method, headers: headersObj });
-      return new Response(await response.arrayBuffer(), {
-        status: response.status,
-        headers: response.headers,
-      });
-    }
-
-    processingUrls.add(url);
-
-    // Track request for UI panel
-    const requestId = ++requestIdCounter;
-    activeRequests.set(url, { id: requestId, url, method: request.method, headers: headersObj });
-
-    // Send request start event to UI panel
-    sendNetworkEvent('start', requestId, url, request.method, headersObj);
-
-    try {
-      // Forward request using bypass session (no protocol handler)
-      const response = await bypassSession.fetch(url, {
-        method: request.method,
-        headers: headersObj,
-      });
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-
-      // Save to disk (if output directory specified)
-      if (outputDir) {
-        const filename = generateFilename(url);
-        const filepath = path.join(outputDir, filename);
-        const dirpath = path.dirname(filepath);
-        if (!fs.existsSync(dirpath)) {
-          fs.mkdirSync(dirpath, { recursive: true });
-        }
-        fs.writeFileSync(filepath, buffer);
-      }
-
-      // Send request complete event to UI panel
-      sendNetworkEvent('complete', requestId, url, request.method, headersObj, response.status);
-      activeRequests.delete(url);
-
-      // Return ORIGINAL response (unchanged)
-      return new Response(buffer, {
-        status: response.status,
-        headers: response.headers,
-      });
-    } finally {
-      processingUrls.delete(url);
-    }
-  });
+const handler = new ProtocolHandler({
+  outputDir: './scraped',
+  filter: /api\.example\.com/,
+  selector: 'img[src]',
+  sourceUrls: new Set<string>(),
+  completedSourceUrls: new Set<string>(),
+  uiView,
+  webView,
 });
+
+handler.register();
 ```
 
 **Critical Requirements**:
