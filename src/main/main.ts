@@ -1,17 +1,13 @@
-const { app, BaseWindow, WebContentsView } = require("electron");
-const path = require("path");
+import { app, BaseWindow, WebContentsView } from 'electron';
+import path from 'node:path';
 
-const urlArg = process.argv.find((arg) => arg.startsWith("http"));
+const urlArg = process.argv.find((arg) => arg.startsWith('http')) ?? undefined;
 
-function createWindow() {
+function createWindow(): void {
   // Create a BaseWindow (not BrowserWindow) for multi-view support
   const win = new BaseWindow({
     width: 1200,
     height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
   });
 
   // Left panel: Web browser WebContentsView
@@ -22,14 +18,14 @@ function createWindow() {
       sandbox: true,
     },
   });
-  
+
   win.contentView.addChildView(webView);
-  
+
   // Load URL in the web view
   if (urlArg) {
     webView.webContents.loadURL(urlArg);
   } else {
-    webView.webContents.loadURL("about:blank");
+    webView.webContents.loadURL('about:blank');
   }
 
   // Right panel: UI panel WebContentsView
@@ -40,22 +36,28 @@ function createWindow() {
       sandbox: true,
     },
   });
-  
+
   win.contentView.addChildView(uiView);
-  
+
   // Load the UI panel HTML
-  const uiPath = path.join(__dirname, "../renderer/ui-panel.html");
+  const uiPath = path.join(
+    path.dirname(new URL(import.meta.url).pathname),
+    '../renderer/ui-panel.html'
+  );
   uiView.webContents.loadFile(uiPath);
 
-  // Set bounds after window is ready
-  win.once("ready-to-show", () => {
+  // Set bounds after window is shown (BaseWindow doesn't have ready-to-show)
+  const setupViewBounds = () => {
     const bounds = win.getBounds();
     webView.setBounds({ x: 0, y: 0, width: 700, height: bounds.height });
     uiView.setBounds({ x: 700, y: 0, width: bounds.width - 700, height: bounds.height });
-  });
+  };
+
+  // BaseWindow has 'show' event but it's not in the TypeScript types
+  win.addListener('show', setupViewBounds);
 
   // Handle window resize
-  win.on("resize", () => {
+  win.on('resize', () => {
     const bounds = win.getBounds();
     webView.setBounds({ x: 0, y: 0, width: 700, height: bounds.height });
     uiView.setBounds({ x: 700, y: 0, width: bounds.width - 700, height: bounds.height });
@@ -65,15 +67,15 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-  app.on("activate", () => {
+  app.on('activate', () => {
     if (BaseWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
     app.quit();
   }
 });
