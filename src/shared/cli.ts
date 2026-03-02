@@ -1,75 +1,68 @@
 import path from 'node:path';
+import { Command } from 'commander';
 import type { CLIArgs } from './types.ts';
 
 /**
- * Parse CLI arguments
+ * Parse CLI arguments using commander
  */
 export function parseCLIArgs(): CLIArgs {
-  const args: CLIArgs = {};
+  const program = new Command();
 
-  // --output / -o
-  const outputMatch =
-    process.argv.find((arg) => arg.startsWith('--output='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-o' || arg.startsWith('-o='))?.split('=')[1];
-  if (outputMatch) {
-    args.outputDir = path.resolve(process.cwd(), outputMatch);
+  program
+    .name('initialxy-scraper')
+    .description('GUI browser with scraping capabilities')
+    .version('1.0.0')
+    .argument('<url>', 'URL to load (required)')
+    .option('-o, --output <dir>', 'Output directory for scraped files')
+    .option('-f, --filter <regex>', 'URL filter regex for eligible responses')
+    .option('-s, --selector <selector>', 'CSS selector for src attribute extraction')
+    .option('-w, --wait <seconds>', 'Wait seconds after page load before closing')
+    .option('-r, --scroll <pixels>', 'Scroll down by pixels (0 = scroll to bottom)')
+    .option('-c, --close-on-idle <seconds>', 'Close window after N seconds of network idle')
+    .option('--rename-sequence <pattern>', 'Rename pattern for scraped files');
+
+  program.parse();
+
+  const args = program.args;
+  const options = program.opts();
+
+  if (args.length === 0) {
+    console.error('Error: URL argument is required');
+    program.outputHelp();
+    process.exit(1);
   }
 
-  // --url / -u
-  const urlMatch =
-    process.argv.find((arg) => arg.startsWith('--url='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-u' || arg.startsWith('-u='))?.split('=')[1];
-  if (urlMatch) {
-    args.url = urlMatch;
+  const result: CLIArgs = {
+    url: args[0],
+  };
+
+  if (options.output) {
+    result.outputDir = path.resolve(process.cwd(), options.output);
   }
 
-  // --filter / -f
-  const filterMatch =
-    process.argv.find((arg) => arg.startsWith('--filter='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-f' || arg.startsWith('-f='))?.split('=')[1];
-  if (filterMatch) {
-    args.filter = new RegExp(filterMatch);
+  if (options.filter) {
+    result.filter = new RegExp(options.filter);
   }
 
-  // --selector / -s
-  const selectorMatch =
-    process.argv.find((arg) => arg.startsWith('--selector='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-s' || arg.startsWith('-s='))?.split('=')[1];
-  if (selectorMatch) {
-    args.selector = selectorMatch;
+  if (options.selector) {
+    result.selector = options.selector;
   }
 
-  // --wait / -w
-  const waitMatch =
-    process.argv.find((arg) => arg.startsWith('--wait='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-w' || arg.startsWith('-w='))?.split('=')[1];
-  if (waitMatch) {
-    args.wait = parseFloat(waitMatch);
+  if (options.wait) {
+    result.wait = parseFloat(options.wait);
   }
 
-  // --scroll / -r
-  const scrollMatch =
-    process.argv.find((arg) => arg.startsWith('--scroll='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-r' || arg.startsWith('-r='))?.split('=')[1];
-  if (scrollMatch) {
-    args.scroll = parseFloat(scrollMatch);
+  if (options.scroll) {
+    result.scroll = parseFloat(options.scroll);
   }
 
-  // --close-on-idle / -c
-  const closeOnIdleMatch =
-    process.argv.find((arg) => arg.startsWith('--close-on-idle='))?.split('=')[1] ||
-    process.argv.find((arg) => arg === '-c' || arg.startsWith('-c='))?.split('=')[1];
-  if (closeOnIdleMatch) {
-    args.closeOnIdle = parseFloat(closeOnIdleMatch);
+  if (options.closeOnIdle) {
+    result.closeOnIdle = parseFloat(options.closeOnIdle);
   }
 
-  // --rename-sequence
-  const renameSequenceMatch = process.argv
-    .find((arg) => arg.startsWith('--rename-sequence='))
-    ?.split('=')[1];
-  if (renameSequenceMatch) {
-    args.renameSequence = renameSequenceMatch;
+  if (options.renameSequence) {
+    result.renameSequence = options.renameSequence;
   }
 
-  return args;
+  return result;
 }

@@ -18,7 +18,7 @@ import type { CLIArgs } from '../shared/types.ts';
 let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
 
-function createWindow(cliArgs: CLIArgs): void {
+function createWindow(cliArgs: CLIArgs): BaseWindow {
   // Create a BaseWindow (not BrowserWindow) for multi-view support
   const win = new BaseWindow({
     width: 1200,
@@ -36,6 +36,7 @@ function createWindow(cliArgs: CLIArgs): void {
   });
 
   win.contentView.addChildView(webView);
+  webView.setVisible(true);
 
   // Load URL in the web view
   if (cliArgs.url) {
@@ -55,6 +56,7 @@ function createWindow(cliArgs: CLIArgs): void {
   });
 
   win.contentView.addChildView(uiView);
+  uiView.setVisible(true);
 
   // Load the UI panel HTML
   const uiPath = path.join(
@@ -163,6 +165,8 @@ function createWindow(cliArgs: CLIArgs): void {
       allCompleted: true,
     };
   });
+
+  return win;
 }
 
 app.whenReady().then(async () => {
@@ -178,18 +182,18 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
 
   const cliArgs = parseCLIArgs();
-  createWindow(cliArgs);
+  const win = createWindow(cliArgs);
 
-  // Wait for window to be ready
-  app.on('ready', async () => {
-    if (!webView?.webContents) return;
-
-    // Initialize automation manager
+  // Initialize automation manager after window is created
+  if (webView?.webContents) {
     const automation = new AutomationManager(webView, cliArgs);
     automation.initializeWait();
     automation.initializeScroll();
     automation.initializeCloseOnIdle();
-  });
+  }
+
+  // Show the window
+  win.show();
 
   app.on('activate', () => {
     if (BaseWindow.getAllWindows().length === 0) {
