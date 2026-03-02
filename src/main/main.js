@@ -1,6 +1,8 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 
+const urlArg = process.argv.find((arg) => arg.startsWith("http"));
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
@@ -8,11 +10,21 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
+      webviewTag: true,
     },
   });
 
-  win.loadFile(path.join(__dirname, "../renderer/index.html"));
+  const rendererPath = path.join(__dirname, "../renderer/index.html");
+  win.loadFile(rendererPath);
+
+  win.webContents.on("did-finish-load", () => {
+    if (urlArg) {
+      win.webContents.executeJavaScript(
+        `document.getElementById('webview').setAttribute('src', '${urlArg}')`
+      );
+    }
+  });
 }
 
 app.whenReady().then(() => {
