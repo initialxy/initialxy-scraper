@@ -2,10 +2,51 @@
 
 This document tracks development progress and technical decisions. It is **optimized for LLM context** - concise, relevant, and actionable. Irrelevant history is cleaned up.
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 **Electron**: 40.6.1
 **Node**: 18.x+
 **TypeScript**: 5.9.3 (native Node.js support)
+
+---
+
+## Architecture
+
+### Current Implementation: BaseWindow + Dual WebContentsView
+
+```
+BaseWindow (1200x800, autoHideMenuBar: true)
+    │
+    ├─ contentView (View container)
+    │   │
+    │   ├─ WebContentsView (left, dynamic width) - Web browser
+    │   │   └─ webContents - loads external URLs
+    │   │
+    │   └─ WebContentsView (right, 500px fixed) - UI panel
+    │       └─ webContents - loads local HTML
+    │
+    └─ Main Process
+        ├─ nativeTheme.themeSource = 'dark'
+        ├─ app.setPath('userData', './userdata/') - User data directory
+        ├─ globalShortcut - Alt+Left/Right for back/forward
+        ├─ session.webRequest.* - Network monitoring
+        ├─ protocol.handle() - Response body capture (when --output)
+        └─ IPC - Main ↔ Renderer communication
+```
+
+**Why BaseWindow + WebContentsView?**
+
+- Modern Electron 30+ API (replaces deprecated BrowserView)
+- Direct Chromium Views API integration
+- Proper multi-view support in single window
+- Both views fully isolated with separate webContents
+
+**Key Implementation Details**:
+
+- `setBounds()` called on `show` event (BaseWindow has no `ready-to-show`)
+- Left panel resizes dynamically, right panel stays fixed at 500px
+- Each WebContentsView has independent session/webContents
+- Dark mode via `nativeTheme.themeSource = 'dark'` (not CSS injection)
+- User data stored in `./userdata/` directory (relative to executable)
 
 ---
 

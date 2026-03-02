@@ -7,4 +7,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('network-request-complete', (_, data) => callback(data)),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   getPageSource: () => ipcRenderer.invoke('get-page-source'),
+  applySelector: () => ipcRenderer.invoke('apply-selector'),
+  scrollPage: () => ipcRenderer.invoke('scroll-page'),
+  checkSourceCompleted: () => ipcRenderer.invoke('check-source-completed'),
+  markSourceCompleted: (url) => ipcRenderer.invoke('mark-source-completed', url),
+  getCompletedStatus: () => ipcRenderer.invoke('get-completed-status'),
 });
