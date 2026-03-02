@@ -47,22 +47,31 @@ function createWindow(): void {
   );
   uiView.webContents.loadFile(uiPath);
 
+  // Right panel fixed width
+  const RIGHT_PANEL_WIDTH = 500;
+
   // Set bounds after window is shown (BaseWindow doesn't have ready-to-show)
   const setupViewBounds = () => {
     const bounds = win.getBounds();
-    webView.setBounds({ x: 0, y: 0, width: 700, height: bounds.height });
-    uiView.setBounds({ x: 700, y: 0, width: bounds.width - 700, height: bounds.height });
+    webView.setBounds({
+      x: 0,
+      y: 0,
+      width: bounds.width - RIGHT_PANEL_WIDTH,
+      height: bounds.height,
+    });
+    uiView.setBounds({
+      x: bounds.width - RIGHT_PANEL_WIDTH,
+      y: 0,
+      width: RIGHT_PANEL_WIDTH,
+      height: bounds.height,
+    });
   };
 
   // BaseWindow has 'show' event but it's not in the TypeScript types
   win.addListener('show', setupViewBounds);
 
-  // Handle window resize
-  win.on('resize', () => {
-    const bounds = win.getBounds();
-    webView.setBounds({ x: 0, y: 0, width: 700, height: bounds.height });
-    uiView.setBounds({ x: 700, y: 0, width: bounds.width - 700, height: bounds.height });
-  });
+  // Handle window resize - left panel resizes, right panel stays fixed
+  win.on('resize', setupViewBounds);
 }
 
 app.whenReady().then(() => {
