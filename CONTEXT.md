@@ -5,6 +5,7 @@ This document tracks development progress and technical decisions. It is **optim
 **Version**: 1.0.0
 **Electron**: 40.6.1
 **Node**: 18.x+
+**TypeScript**: 5.9.3 (native Node.js support)
 
 ---
 
@@ -13,17 +14,18 @@ This document tracks development progress and technical decisions. It is **optim
 ### Current Implementation: BaseWindow + Dual WebContentsView
 
 ```
-BaseWindow (1200x800)
+BaseWindow (1200x800, autoHideMenuBar: true)
     │
     ├─ contentView (View container)
     │   │
-    │   ├─ WebContentsView (left, 700px) - Web browser
+    │   ├─ WebContentsView (left, dynamic width) - Web browser
     │   │   └─ webContents - loads external URLs
     │   │
-    │   └─ WebContentsView (right, 500px) - UI panel
+    │   └─ WebContentsView (right, 500px fixed) - UI panel
     │       └─ webContents - loads local HTML
     │
     └─ Main Process
+        ├─ nativeTheme.themeSource = 'dark'
         ├─ session.webRequest.* - Network monitoring
         ├─ protocol.handle() - Response body capture (when --output)
         └─ IPC - Main ↔ Renderer communication
@@ -36,9 +38,10 @@ BaseWindow (1200x800)
 - Both views fully isolated with separate webContents
 
 **Key Implementation Details**:
-- `setBounds()` must be called AFTER `ready-to-show` event
-- Window resize handler required to maintain view proportions
+- `setBounds()` called on `show` event (BaseWindow has no `ready-to-show`)
+- Left panel resizes dynamically, right panel stays fixed at 500px
 - Each WebContentsView has independent session/webContents
+- Dark mode via `nativeTheme.themeSource = 'dark'` (not CSS injection)
 
 ---
 

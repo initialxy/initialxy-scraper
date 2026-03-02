@@ -16,6 +16,7 @@ initialxy-scraper is a minimal Electron-based web browser designed for network m
 ### No Traditional Browser UI
 
 - No navbar, address bar, or tabs
+- No menu bar (autoHideMenuBar enabled)
 - No settings menu or preferences
 - No bookmarks or history UI
 - No extensions system
