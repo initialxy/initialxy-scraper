@@ -41,7 +41,7 @@ initialxy-scraper is a minimal Electron-based web browser designed for network m
 - **Why**: Many websites detect and block users when DevTools is opened
 - **Solution**: Use only standard Electron APIs:
   - `session.webRequest.*` for network interception
-  - `protocol.registerBufferProtocol()` for response body capture
+  - `protocol.handle()` for response body capture
   - `webContents.executeJavaScript()` for DOM manipulation
   - `clipboard.writeText()` for clipboard operations
 - **Forbidden**: Do NOT use `webContents.devToolsWin`, `openDevTools()`, or DevTools Protocol
@@ -223,7 +223,7 @@ Main Process (main.js)
 │       └── Network Panel DIV (right panel, rendered in browser)
 │
 ├── Protocol Handler (when --output present)
-│   └── protocol.registerBufferProtocol()
+│   └── protocol.handle()
 │
 ├── WebRequest Listeners
 │   └── session.webRequest.onBeforeRequest/onCompleted
@@ -234,26 +234,44 @@ Main Process (main.js)
 
 ### Protocol API for Response Capture
 
+**Modern API (Electron 25+)**: Use `protocol.handle()` - NOT deprecated `registerBufferProtocol()`
+
 ```javascript
-const { protocol, session } = require("electron");
+const { protocol, net } = require("electron");
+const fs = require("fs");
 
-protocol.registerBufferProtocol("https", async (request) => {
-  const response = await fetch(request.url);
-  const buffer = Buffer.from(await response.arrayBuffer());
-
-  // Save to disk
-  fs.writeFileSync(outputPath + "/" + filename, buffer);
-
-  // Return original to browser
-  return {
-    data: buffer,
-    mimeType: response.headers.get("content-type"),
-    statusCode: response.status,
-  };
+app.whenReady().then(() => {
+  protocol.handle("https", async (request) => {
+    // Forward request and capture response
+    const response = await net.fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+    });
+    
+    const buffer = Buffer.from(await response.arrayBuffer());
+    
+    // Save to disk
+    const filename = generateFilename(request.url);
+    fs.writeFileSync(path.join(outputDir, filename), buffer);
+    
+    // Return ORIGINAL response (unchanged)
+    return new Response(buffer, {
+      status: response.status,
+      headers: response.headers,
+    });
+  });
 });
 ```
 
-**Important**: Protocol API only activates when `--output` argument present.
+**Critical Requirements**:
+- Register in `app.whenReady()` - BEFORE any navigation
+- Use `net.fetch()` to forward request - do NOT block/modify
+- Return `Response` object with original status/headers
+- Works at session level - independent of window type
+
+**Why it works**: Protocol handlers intercept at network layer, before request leaves browser. We fetch the actual response, capture it, then return it unchanged to the page.
+
+**Performance**: Adds overhead - only enable when `--output` flag present.
 
 ### IPC Channels
 

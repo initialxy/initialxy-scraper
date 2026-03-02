@@ -1,279 +1,197 @@
 # initialxy-scraper - Technical Context
 
-## Overview
+This document tracks development progress and technical decisions. It is **optimized for LLM context** - concise, relevant, and actionable. Irrelevant history is cleaned up.
 
-initialxy-scraper is a minimal Electron-based web browser designed for network monitoring and automated web scraping. It provides a focused two-panel interface: web view on the left, network monitor on the right.
-
-**Version**: 1.0.0 (initial)
-**Electron**: 30.0.0+ (recommended)
-**Node**: 18.x+ (recommended)
-
-**Key Directories:**
-
-- `src/main/` - Main process (window, IPC, protocol handler)
-- `src/renderer/` - Renderer process (network panel UI)
-- `dist/` - Bundled output for production
-- `userdata/` - User profile data (auto-created)
+**Version**: 1.0.0
+**Electron**: 40.6.1
+**Node**: 18.x+
 
 ---
 
 ## Architecture
 
-### Process Model
+### Current Implementation: BaseWindow + Dual WebContentsView
 
 ```
-Main Process (src/main/main.js)
+BaseWindow (1200x800)
     │
-    ├─ Window Management
-    │   └─ Creates single BrowserWindow with WebContents
+    ├─ contentView (View container)
+    │   │
+    │   ├─ WebContentsView (left, 700px) - Web browser
+    │   │   └─ webContents - loads external URLs
+    │   │
+    │   └─ WebContentsView (right, 500px) - UI panel
+    │       └─ webContents - loads local HTML
     │
-    ├─ Protocol Handler (when --output present)
-    │   └─ protocol.registerBufferProtocol() for response capture
-    │
-    ├─ WebRequest Listeners
-    │   └─ session.webRequest.* for network monitoring
-    │
-    └─ IPC Bridge ←→ Renderer Process
-            │
-            └─ Renderer (src/renderer/app.js)
-                └─ Network Panel UI
+    └─ Main Process
+        ├─ session.webRequest.* - Network monitoring
+        ├─ protocol.handle() - Response body capture (when --output)
+        └─ IPC - Main ↔ Renderer communication
 ```
 
-### Build System
+**Why BaseWindow + WebContentsView?**
+- Modern Electron 30+ API (replaces deprecated BrowserView)
+- Direct Chromium Views API integration
+- Proper multi-view support in single window
+- Both views fully isolated with separate webContents
 
-- **Webpack** or **esbuild** for bundling (recommended)
-- **Alternative**: Direct Node.js execution (no bundling required)
-- **Development**: `npm run dev` (watch mode)
-- **Production**: `npm run build` + `electron-builder`
+**Key Implementation Details**:
+- `setBounds()` must be called AFTER `ready-to-show` event
+- Window resize handler required to maintain view proportions
+- Each WebContentsView has independent session/webContents
 
 ---
 
-## Web Scraping Capabilities
+## Protocol API for Response Capture
 
-### 1. Execute JavaScript in Page Context
+### Modern API (Electron 25+)
 
-**API**: `webContents.executeJavaScript(code, useMainWorld)`
+**Use**: `protocol.handle()` - NOT deprecated `registerBufferProtocol()`
 
-**Location**: Main process, called directly on WebContents
+**Purpose**: Intercept HTTP/HTTPS requests, capture response body, save to disk, return original response unchanged.
 
-**Usage Pattern**:
-
+**Pattern**:
 ```javascript
-// From main process
-webContents
-  .executeJavaScript(
-    "document.documentElement.outerHTML",
-    false // useMainWorld
-  )
-  .then((result) => {
-    // result contains the executed value
+const { protocol, net } = require("electron");
+const fs = require("fs");
+
+app.whenReady().then(() => {
+  protocol.handle("https", async (request) => {
+    // Forward request and capture response
+    const response = await net.fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+    });
+    
+    const buffer = Buffer.from(await response.arrayBuffer());
+    
+    // Save to disk
+    const filename = generateFilename(request.url);
+    fs.writeFileSync(path.join(outputDir, filename), buffer);
+    
+    // Return ORIGINAL response (unchanged)
+    return new Response(buffer, {
+      status: response.status,
+      headers: response.headers,
+    });
   });
+});
 ```
 
-**Common Use Cases**:
+**Critical Requirements**:
+1. Register in `app.whenReady()` - BEFORE any navigation
+2. Use `net.fetch()` to forward request - do NOT block/modify
+3. Return `Response` object with original status/headers
+4. Works at session level - independent of window type
 
-- Extract DOM elements by selector
-- Scroll page programmatically
-- Get page source HTML
-- Modify page state
+**Why it works**: Protocol handlers intercept at network layer, before request leaves browser. We fetch the actual response, capture it, then return it unchanged to the page.
 
-**Available WebContents Methods**:
-
-- `executeJavaScript(code, useMainWorld)` - Run JS in page context
-- `capturePage()` - Screenshot as image
-- `getURL()` - Get current URL
-- `getTitle()` - Get page title
-- `loadURL(url)` - Navigate
-- `goBack()`, `goForward()`, `reload()`, `stop()` - Navigation
+**Performance**: Adds overhead - only enable when `--output` flag present.
 
 ---
 
-### 2. Network Request Interception
+## WebRequest API for Network Monitoring
 
-**Location**: `src/main/main.js`
+**Purpose**: Track requests/responses for UI display (NO body access)
 
-**Available WebRequest Events**:
-
+**Events**:
 ```javascript
-const ses = session.defaultSession;
+const ses = webView.webContents.session;
 
-// Before request is made (can cancel/redirect)
-ses.webRequest.onBeforeRequest(details, callback);
-
-// Before headers are sent (can modify request headers)
-ses.webRequest.onBeforeSendHeaders(details, callback);
-
-// After response headers received (can modify response headers)
-ses.webRequest.onHeadersReceived(details, callback);
-
-// After request completes (access status, timing)
-ses.webRequest.onCompleted(details, callback);
-
-// If request was blocked
-ses.webRequest.onBlocked(details, callback);
-```
-
-**Details Object Contains**:
-
-- `id` - Request ID (unique per request)
-- `url` - Request URL
-- `method` - HTTP method (GET, POST, etc.)
-- `webContentsId` - WebContents identifier
-- `resourceType` - `mainFrame`, `subFrame`, `script`, `stylesheet`, `image`, `xhr`, `fetch`, etc.
-- `referrer` - Referrer URL
-- `requestHeaders` - Request headers (in `onBeforeSendHeaders`, `onHeadersReceived`)
-- `responseHeaders` - Response headers (in `onHeadersReceived`, `onCompleted`)
-- `statusCode` - HTTP status code (in `onCompleted`)
-- `fromCache` - Whether from cache
-
-**For Network Monitor Panel**:
-
-```javascript
-// Track request start
 ses.webRequest.onBeforeRequest((details) => {
-  webContents.send("network-request-start", {
-    id: details.id,
-    url: details.url,
-    method: details.method,
-    resourceType: details.resourceType,
-    requestHeaders: details.requestHeaders,
-  });
+  // Request started: id, url, method, resourceType, requestHeaders
 });
 
-// Track request completion
 ses.webRequest.onCompleted((details) => {
-  webContents.send("network-request-complete", {
-    id: details.id,
-    statusCode: details.statusCode,
-    responseHeaders: details.responseHeaders,
-  });
+  // Request done: statusCode, responseHeaders, fromCache
 });
 ```
 
-**Limitation**: Response body is NOT accessible via `WebRequest` API. Use Protocol API for body capture.
+**Limitation**: Cannot access response body - use Protocol API for that.
+
+---
+
+## WebContents.executeJavaScript()
+
+**Purpose**: Run JS in page context for DOM manipulation
+
+**Usage**:
+```javascript
+webView.webContents.executeJavaScript("document.querySelector('.selector').innerText");
+```
+
+**Use Cases**: Extract content by selector, scroll page, get page source
 
 ---
 
 ## Security Model
 
-### WebContents Settings
-
+**WebPreferences** (for both WebContentsView instances):
 ```javascript
 {
-  nodeIntegration: false,        // No direct Node.js access in pages
-  contextIsolation: true,        // Isolated world for preload
-  sandbox: true,                 // OS-level sandboxing
-  enableRemoteModule: false,     // No Electron remote module
-  webviewTag: false,             // Disable nested webviews
+  nodeIntegration: false,  // No Node.js in renderer
+  contextIsolation: true,  // Isolated world
+  sandbox: true,           // OS sandboxing
 }
 ```
 
-### Implications for Scraping
-
-1. **No direct Node.js access** from web pages
-2. **Context isolation enabled** for security
-3. **No DevTools needed** - all injection happens via Electron APIs
-4. **Standard browser fingerprint** - no obvious automation flags
+**Implications**:
+- No DevTools needed - all via Electron APIs
+- Standard browser fingerprint (no automation flags)
+- Secure by default
 
 ---
 
 ## IPC Communication
 
-### Renderer → Main
-
-```javascript
-// Send one-way message
-ipc.send("channelName", data);
-
-// Send with response
-const result = ipc.sendSync("channelName", data);
-```
-
-### Main → Renderer
-
-```javascript
-// In main process
-webContents.send('channelName', data)
-
-// In renderer
-ipc.on('channelName', (event, data) => { ... })
-```
-
-### IPC Channels
-
-| Channel                    | Direction       | Purpose                   |
-| -------------------------- | --------------- | ------------------------- |
-| `network-request-start`    | Main → Renderer | Network request started   |
-| `network-request-complete` | Main → Renderer | Network request completed |
-| `copy-to-clipboard`        | Renderer → Main | Copy text to clipboard    |
-| `get-page-source`          | Renderer → Main | Request page source HTML  |
+**Channels**:
+| Channel | Direction | Purpose |
+|---------|-----------|---------|
+| `network-request-start` | Main → Renderer | Request began |
+| `network-request-complete` | Main → Renderer | Response received |
+| `copy-to-clipboard` | Renderer → Main | Copy text |
+| `get-page-source` | Renderer → Main | Get HTML |
 
 ---
 
 ## Key Files
 
-| File                      | Purpose                            |
-| ------------------------- | ---------------------------------- |
-| `src/main/main.js`        | Entry point, window, IPC, protocol |
-| `src/renderer/app.js`     | Network panel UI logic             |
-| `src/renderer/index.html` | Panel HTML structure               |
-| `src/renderer/style.css`  | Panel styling                      |
+| File | Purpose |
+|------|---------|
+| `src/main/main.js` | BaseWindow + WebContentsView setup, Protocol API, WebRequest |
+| `src/renderer/ui-panel.html` | Right panel UI |
 
 ---
 
-## Development Workflow
+## CLI Arguments (Future)
 
-1. **Start dev mode**: `npm run dev`
-2. **Production build**: `npm run build`
-3. **User data location**: `./userdata/` (relative to executable)
-4. **Debug**: Check console in main process or renderer
+| Arg | Purpose |
+|-----|---------|
+| `--output` / `-o` | Enable Protocol API, save responses to dir |
+| `--filter` / `-f` | Regex URL filter for eligible responses |
+| `--selector` / `-s` | CSS selector for src attribute extraction |
+| `--wait` / `-w` | Wait seconds after page load |
+| `[URL]` | Initial URL to load |
 
 ---
 
-## Protocol API for Response Body Capture
+## Testing
 
-**Location**: Electron's `protocol` module
+```bash
+# Basic browser
+npm start -- https://google.com
 
-**Purpose**: Capture actual response payloads (bodies) which WebRequest API cannot provide
-
-**Usage**:
-
-```javascript
-const { protocol, session } = require("electron");
-
-// Register buffer protocol handler (only when --output present)
-protocol.registerBufferProtocol("https", async (request) => {
-  const url = request.url;
-
-  // Fetch the actual response
-  const response = await fetch(url);
-  const buffer = Buffer.from(await response.arrayBuffer());
-
-  // Save to disk for scraping
-  fs.writeFileSync(outputPath + "/" + filename, buffer);
-
-  // Return original response to browser (do NOT modify or block)
-  return {
-    data: buffer,
-    mimeType: response.headers.get("content-type"),
-    statusCode: response.status,
-  };
-});
+# With scraping (future)
+npm start -- --output ./scraped https://example.com
 ```
 
-**Important Notes**:
-
-- **Side Panel**: Uses WebRequest API only for monitoring (does NOT capture response bodies)
-- **CLI Scraping Mode**: Uses Protocol API only when `--output` arg is present
-- **Do NOT modify requests**: Always return original response to browser
-- **Performance**: Protocol API adds overhead, only enable when needed
-
 ---
 
-## Notes
+## Known Decisions
 
-- **No DevTools detection**: All methods use standard Electron APIs, not DevTools protocol
-- **Headless not supported**: initialxy-scraper is a GUI browser only
-- **Single tab**: One WebContents per browser instance
-- **User data**: Stored in `./userdata/` relative to executable
-- **Protocol API overhead**: Only enable when CLI scraping args present
+1. **BaseWindow + WebContentsView** - NOT BrowserWindow + webview tag
+2. **protocol.handle()** - NOT deprecated registerBufferProtocol()
+3. **Two fixed-size views** - 700px web, 500px UI
+4. **Dark theme only** - no light mode
+5. **GUI browser** - NOT headless
+6. **No DevTools** - all via Electron APIs
