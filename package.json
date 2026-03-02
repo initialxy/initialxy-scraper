@@ -1,0 +1,12 @@
+{
+  "name": "initialxy-scraper",
+  "version": "1.0.0",
+  "description": "Minimal browser meant for scripted scraping",
+  "license": "MIT",
+  "author": "initialxy@gmail.com",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
