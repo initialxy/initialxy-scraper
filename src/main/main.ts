@@ -202,7 +202,9 @@ app.whenReady().then(async () => {
   // Force dark mode theme
   nativeTheme.themeSource = 'dark';
 
-  // Set default user agent to Chromium without Electron branding
+  const cliArgs = parseCLIArgs();
+
+  // Set default user agent to Chromium without Electron branding BEFORE creating window
   const defaultUserAgent = app.userAgentFallback;
   const chromeVersion = process.versions.chrome;
   const chromeVersionPlaceholder = chromeVersion
@@ -216,7 +218,6 @@ app.whenReady().then(async () => {
     .replace(chromeVersion, chromeVersionPlaceholder);
   app.userAgentFallback = newUserAgent;
 
-  const cliArgs = parseCLIArgs();
   const { win } = createWindow(cliArgs);
 
   // Initialize automation manager after window is created
