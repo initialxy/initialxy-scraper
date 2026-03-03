@@ -36,10 +36,6 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
     },
   });
 
-  // Set Chrome user agent to avoid detection
-  webView.webContents.userAgent =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
   win.contentView.addChildView(webView);
   webView.setVisible(true);
 
@@ -205,6 +201,19 @@ app.whenReady().then(async () => {
 
   // Force dark mode theme
   nativeTheme.themeSource = 'dark';
+
+  // Set default user agent to Chromium without Electron branding
+  const defaultUserAgent = app.userAgentFallback;
+  const chromeVersion = process.versions.chrome;
+  const chromeVersionPlaceholder = chromeVersion
+    .split('.')
+    .map((v, idx) => (idx === 0 ? v : '0'))
+    .join('.');
+  let newUserAgent = defaultUserAgent
+    .replace(/Min\/\S+\s/g, '')
+    .replace(/Electron\/\S+\s/g, '')
+    .replace(chromeVersion, chromeVersionPlaceholder);
+  app.userAgentFallback = newUserAgent;
 
   const cliArgs = parseCLIArgs();
   const { win } = createWindow(cliArgs);
