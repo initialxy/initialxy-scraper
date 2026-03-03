@@ -7,9 +7,10 @@
   "type": "module",
   "main": "src/main/main.ts",
   "scripts": {
-    "start": "npm run build:ui && electron .",
-    "dev": "electron . --enable-logging",
-    "build:ui": "vite build",
+    "start": "npm run build && electron .",
+    "dev": "vite",
+    "electron:dev": "electron . --enable-logging",
+    "build": "vite build",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts",

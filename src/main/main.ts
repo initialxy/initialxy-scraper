@@ -19,7 +19,11 @@ import type { WebContents } from 'electron';
 let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
 
-function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: ProtocolHandler } {
+function createWindow(cliArgs: CLIArgs): {
+  win: BaseWindow;
+  protocolHandler?: ProtocolHandler;
+  cliArgs?: CLIArgs;
+} {
   // Create a BaseWindow (not BrowserWindow) for multi-view support
   const win = new BaseWindow({
     width: 1200,
@@ -38,6 +42,9 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
 
   win.contentView.addChildView(webView);
   webView.setVisible(true);
+
+  // Load about:blank initially - will navigate to target URL after protocol handler is registered
+  webView!.webContents.loadURL('about:blank');
 
   // Inject dark scrollbar CSS for web view
   webView.webContents.on('did-finish-load', () => {
@@ -65,13 +72,6 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
     `);
   });
 
-  // Load URL in the web view
-  if (cliArgs.url) {
-    webView!.webContents.loadURL(cliArgs.url);
-  } else {
-    webView!.webContents.loadURL('about:blank');
-  }
-
   // Right panel: UI panel WebContentsView
   uiView = new WebContentsView({
     webPreferences: {
@@ -88,7 +88,7 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
   // Load the UI panel HTML
   const uiPath = path.join(
     path.dirname(new URL(import.meta.url).pathname),
-    '../renderer/ui_panel.html'
+    '../renderer/ui/ui_panel.html'
   );
   uiView.webContents.loadFile(uiPath);
 
@@ -213,7 +213,7 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
 
   protocolHandler.register();
 
-  return { win, protocolHandler };
+  return { win, protocolHandler, cliArgs };
 }
 
 app.whenReady().then(async () => {
@@ -233,7 +233,15 @@ app.whenReady().then(async () => {
   // Sanitize this app's own name from user agent.
   app.userAgentFallback = app.userAgentFallback.replace(app.getName(), '');
 
-  const { win } = createWindow(cliArgs);
+  const { win, cliArgs: returnedCliArgs } = createWindow(cliArgs);
+
+  // Navigate to target URL after protocol handler is registered and make sure
+  // Network Monitor is initialized by giving it a small delay.
+  if (returnedCliArgs?.url && webView?.webContents) {
+    setTimeout(() => {
+      webView.webContents.loadURL(returnedCliArgs.url);
+    }, 100);
+  }
 
   // Initialize automation manager after window is created
   if (webView?.webContents) {

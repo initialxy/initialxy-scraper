@@ -1,5 +1,5 @@
-import { generateCurl } from '../shared/cross_stack_utils.js';
-import type { NetworkRequestData } from '../shared/types.js';
+import { generateCurl } from '../../shared/cross_stack_utils.ts';
+import type { NetworkRequestData } from '../../shared/types.ts';
 
 interface Api {
   onNetworkRequestStart: (callback: (data: NetworkRequestData) => void) => void;
@@ -38,63 +38,6 @@ class NetworkMonitor {
   }
 
   private initializeEventListeners(): void {
-    // Click on request row to copy cURL
-    this.requestList.addEventListener('click', async (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const row = target.closest('.request-row') as HTMLElement | null;
-      if (!row) return;
-
-      const id = parseInt(row.dataset.id, 10);
-      const req = this.requests.get(id);
-      if (!req) return;
-
-      const curl = generateCurl(req.data.method, req.data.url, req.data.headers);
-      await window.api.copyToClipboard(curl);
-
-      this.showToast('cURL copied to clipboard');
-      row.classList.add('copied');
-      setTimeout(() => row.classList.remove('copied'), 300);
-    });
-
-    // Tooltip on hover
-    this.requestList.addEventListener('mouseenter', (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const row = target.closest('.request-row') as HTMLElement | null;
-      if (!row) return;
-
-      const tooltip = row.querySelector('.tooltip') as HTMLElement | null;
-      if (!tooltip) return;
-
-      const url = row.dataset.url;
-      tooltip.textContent = `${url}\nClick to copy cURL`;
-      tooltip.style.display = 'block';
-    });
-
-    this.requestList.addEventListener('mouseleave', (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const row = target.closest('.request-row') as HTMLElement | null;
-      if (!row) return;
-
-      const tooltip = row.querySelector('.tooltip') as HTMLElement | null;
-      if (tooltip) {
-        tooltip.style.display = 'none';
-      }
-    });
-
-    this.requestList.addEventListener('mousemove', (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const row = target.closest('.request-row') as HTMLElement | null;
-      if (!row) return;
-
-      const tooltip = row.querySelector('.tooltip') as HTMLElement | null;
-      if (!tooltip) return;
-
-      const rect = row.getBoundingClientRect();
-      tooltip.style.top = `${rect.bottom + 5}px`;
-      tooltip.style.left = `${rect.left}px`;
-      tooltip.style.width = `${rect.width}px`;
-    });
-
     // Filter input
     this.filterInput.addEventListener('input', (e: Event) => {
       const target = e.target as HTMLInputElement;
@@ -129,10 +72,20 @@ class NetworkMonitor {
           <span class="status"></span>
           <span class="url">${data.url}</span>
         </div>
-        <div class="tooltip"></div>
+        <div class="tooltip">${data.url}</div>
       `;
-      this.requestList.appendChild(row);
       this.requests.set(data.id, { row, data });
+
+      row.addEventListener('click', async () => {
+        const curl = generateCurl(data.method, data.url, data.headers);
+        await window.api.copyToClipboard(curl);
+
+        this.showToast('cURL copied to clipboard');
+        row.classList.add('copied');
+        setTimeout(() => row.classList.remove('copied'), 300);
+      });
+
+      this.requestList.appendChild(row);
 
       // Apply current filter to new request
       const filter = this.filterInput.value.toLowerCase();

@@ -6,7 +6,7 @@ dist/
 build/
 
 # Generated JS files in renderer
-src/renderer/*.js
+src/renderer/ui/*.js
 
 # Electron app data
 userdata/

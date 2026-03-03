@@ -40,7 +40,7 @@ BaseWindow (1200x800, autoHideMenuBar: true)
 **Frontend Build** (Vite):
 
 ```
-src/renderer/ui_panel.ts → src/renderer/ui_panel.js (4.66 kB)
+src/renderer/ui/ui_panel.ts → src/renderer/ui/ui_panel.js (4.66 kB)
 ```
 
 **Key Implementation Details**:
@@ -51,6 +51,8 @@ src/renderer/ui_panel.ts → src/renderer/ui_panel.js (4.66 kB)
 - Dark mode via `nativeTheme.themeSource = 'dark'`
 - User data stored in `./userdata/` directory (relative to executable)
 - TypeScript 5.9.3 with `verbatimModuleSyntax: true` (requires `.js` extensions in imports)
+- **Protocol handler timing**: Load `about:blank` first, register protocol handler, THEN navigate to target URL (ensures initial HTML is captured)
+- **NPM scripts**: `npm start` builds and launches Electron (no dev server), `npm run dev` starts Vite dev server, `npm run electron:dev` builds and launches Electron with logging
 
 ---
 
@@ -105,10 +107,10 @@ src/renderer/ui_panel.ts → src/renderer/ui_panel.js (4.66 kB)
 
 **Files**:
 
-- `src/renderer/ui_panel.html` - Panel structure
-- `src/renderer/ui_panel.css` - Panel styles (extracted from HTML)
-- `src/renderer/ui_panel.ts` - Panel logic (compiled by Vite)
-- `src/renderer/ui_panel.js` - Compiled output (auto-generated)
+- `src/renderer/ui/ui_panel.html` - Panel structure
+- `src/renderer/ui/ui_panel.css` - Panel styles (extracted from HTML)
+- `src/renderer/ui/ui_panel.ts` - Panel logic (compiled by Vite)
+- `src/renderer/ui/ui_panel.js` - Compiled output (auto-generated)
 - `src/renderer/preload.js` - Exposes `window.api.generateCurl()` to renderer
 
 ---
@@ -199,10 +201,10 @@ src/renderer/ui_panel.ts → src/renderer/ui_panel.js (4.66 kB)
 | File                              | Purpose                                                               |
 | --------------------------------- | --------------------------------------------------------------------- |
 | `src/main/main.ts`                | BaseWindow + WebContentsView setup, Protocol API, navigationHistory   |
-| `src/renderer/ui_panel.html`      | Right panel UI structure                                              |
-| `src/renderer/ui_panel.css`       | Right panel styles                                                    |
-| `src/renderer/ui_panel.ts`        | Right panel logic (compiled by Vite)                                  |
-| `src/renderer/ui_panel.js`        | Compiled output (auto-generated)                                      |
+| `src/renderer/ui/ui_panel.html`   | Right panel UI structure                                              |
+| `src/renderer/ui/ui_panel.css`    | Right panel styles                                                    |
+| `src/renderer/ui/ui_panel.ts`     | Right panel logic (compiled by Vite)                                  |
+| `src/renderer/ui/ui_panel.js`     | Compiled output (auto-generated)                                      |
 | `src/renderer/index.html`         | Legacy browser view (not used in current impl)                        |
 | `src/renderer/index.css`          | Legacy browser styles                                                 |
 | `src/renderer/preload.js`         | Preload script for IPC + generateCurl()                               |
@@ -235,8 +237,11 @@ npm start -- --output-dir ./assets --output-curl --filter "\.json$" https://exam
 # Verbose mode
 npm start -- --verbose --output-dir ./debug https://example.com
 
-# Build UI panel manually
-npm run build:ui
+# Start Vite dev server (for frontend development)
+npm run dev
+
+# Build and launch Electron with logging
+npm run electron:dev
 ```
 
 ---
@@ -252,7 +257,7 @@ npm run build:ui
 7. **No DevTools** - all via Electron APIs
 8. **jsdom for DOM parsing** - NOT inline JavaScript injection in extractSourceUrls()
 9. **isEligible() as single source of truth** - Unified filtering for --output-dir and --output-curl
-10. **Vite build for ui_panel** - TypeScript compiled to ui_panel.js, referenced in ui_panel.html
+10. **Vite build for ui_panel** - TypeScript compiled to ui_panel.js in src/renderer/ui/, referenced in ui_panel.html
 11. **cross_stack_utils.ts** - Shared functions (generateCurl, escapeCurl) for both backend/renderer
 12. **backend_utils.ts** - Node.js-specific utilities (jsdom, path, etc.)
 13. **underscore naming** - All files use underscore instead of kebab-case (ui_panel, not ui-panel)
@@ -260,3 +265,6 @@ npm run build:ui
 15. **Version from package.json** - cli.ts reads version dynamically
 16. **URL auto-prefix** - URLs without http/https are prefixed with https://
 17. **--flat-dir flag** - Optional flat file output without directory structure
+18. **Protocol handler timing** - Load about:blank first, register protocol handler, then navigate to target URL (ensures initial HTML captured)
+19. **NPM scripts** - `npm start` builds + launches Electron, `npm run dev` starts Vite dev server, `npm run electron:dev` builds + launches Electron with logging
+20. **ui directory** - ui_panel.\* files moved to src/renderer/ui/ to avoid ignoring preload.js in .gitignore
