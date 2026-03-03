@@ -1,12 +1,13 @@
 // tsconfig.json
 {
   "compilerOptions": {
-    "noEmit": true, // Optional - see note below
+    "noEmit": true,
     "target": "esnext",
     "module": "nodenext",
     "rewriteRelativeImportExtensions": true,
     "erasableSyntaxOnly": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "lib": ["esnext", "dom"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"]

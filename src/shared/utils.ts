@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { WebContents } from 'electron';
+import { JSDOM } from 'jsdom';
 
 // Track filename collisions
 const filenameCounter = new Map<string, number>();
@@ -12,6 +13,32 @@ export function generateFilename(url: string, counter?: number): string {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname || '/index';
     const baseName = pathname.split('/').filter(Boolean).join('/') || 'index';
+    const ext = path.extname(baseName) || '.html';
+    const nameWithoutExt = baseName.replace(ext, '');
+
+    // Handle collisions by adding counter
+    const currentCount = counter ?? (filenameCounter.get(nameWithoutExt) || 0);
+    if (counter === undefined) {
+      filenameCounter.set(nameWithoutExt, currentCount + 1);
+    }
+
+    if (currentCount === 0) {
+      return `${nameWithoutExt}${ext}`;
+    }
+    return `${nameWithoutExt}_${currentCount}${ext}`;
+  } catch {
+    return `response_${Date.now()}.dat`;
+  }
+}
+
+/**
+ * Generate flat filename from URL (no directory structure)
+ */
+export function generateFlatFilename(url: string, counter?: number): string {
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname || '/index';
+    const baseName = path.basename(pathname) || 'index';
     const ext = path.extname(baseName) || '.html';
     const nameWithoutExt = baseName.replace(ext, '');
 
@@ -70,34 +97,39 @@ export async function extractSourceUrls(
   selector: string
 ): Promise<string[]> {
   try {
-    const urls = await webContents.executeJavaScript(`
-      (function() {
-        const elements = document.querySelectorAll('${selector}');
-        const results = [];
-        
-        elements.forEach(el => {
-          // Priority 1: src attribute
-          if (el.src) {
-            results.push(el.src);
-          }
-          // Priority 2: data-src attribute
-          else if (el.dataset && el.dataset.src) {
-            results.push(el.dataset.src);
-          }
-          // Priority 3: srcset attribute (parse all URLs)
-          else if (el.srcset) {
-            const srcsetUrls = el.srcset.split(',').map(src => {
-              const parts = src.trim().split(/ /);
-              return parts[0];
-            });
-            results.push(...srcsetUrls);
-          }
+    const pageSource = await webContents.executeJavaScript('document.documentElement.outerHTML');
+
+    const dom = new JSDOM(pageSource);
+    const document = dom.window.document;
+    const elements = document.querySelectorAll(selector);
+    const results: string[] = [];
+
+    elements.forEach((el) => {
+      const element = el as HTMLElement & {
+        src?: string;
+        dataset?: { src?: string };
+        srcset?: string;
+      };
+
+      // Priority 1: src attribute
+      if (element.src) {
+        results.push(element.src);
+      }
+      // Priority 2: data-src attribute
+      else if (element.dataset?.src) {
+        results.push(element.dataset.src);
+      }
+      // Priority 3: srcset attribute (parse all URLs)
+      else if (element.srcset) {
+        const srcsetUrls = element.srcset.split(',').map((src) => {
+          const parts = src.trim().split(/ /);
+          return parts[0];
         });
-        
-        return results;
-      })()
-    `);
-    return Array.isArray(urls) ? urls : [];
+        results.push(...srcsetUrls);
+      }
+    });
+
+    return results;
   } catch (error) {
     console.error('[Utils] Error extracting source URLs:', error);
     return [];

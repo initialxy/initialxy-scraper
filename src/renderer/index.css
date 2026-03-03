@@ -1,0 +1,20 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  height: 100vh;
+  display: flex;
+}
+webview {
+  flex: 1;
+  background: #000;
+  border: none;
+}
+#network-panel {
+  width: 500px;
+  background: #1a1a1a;
+  color: #fff;
+  border-left: 1px solid #333;
+}

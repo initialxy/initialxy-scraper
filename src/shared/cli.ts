@@ -1,5 +1,6 @@
-import path from 'node:path';
+import { app } from 'electron';
 import { Command } from 'commander';
+import path from 'node:path';
 import type { CLIArgs } from './types.ts';
 
 /**
@@ -9,9 +10,9 @@ export function parseCLIArgs(): CLIArgs {
   const program = new Command();
 
   program
-    .name('initialxy-scraper')
+    .name(app.getName())
     .description('GUI browser with scraping capabilities')
-    .version('1.0.0')
+    .version(app.getVersion())
     .argument('<url>', 'URL to load (required)')
     .option('-o, --output-dir <dir>', 'Output directory for scraped files')
     .option('-f, --filter <regex>', 'URL filter regex for selecting responses')
@@ -21,7 +22,8 @@ export function parseCLIArgs(): CLIArgs {
     .option('-c, --close-on-idle <seconds>', 'Close window after N seconds of network idle')
     .option('--rename-sequence <pattern>', 'Rename pattern for scraped files')
     .option('-v, --verbose', 'Enable verbose logging for network traffic')
-    .option('--output-curl', 'Output curl commands for matching URLs to stdout');
+    .option('--output-curl', 'Output curl commands for matching URLs to stdout')
+    .option('--flat-dir', 'Dump files flat in output-dir without subdirectories');
 
   program.parse();
 
@@ -34,8 +36,15 @@ export function parseCLIArgs(): CLIArgs {
     process.exit(1);
   }
 
+  let url = args[0];
+
+  // Prefix with https:// if no protocol specified
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+
   const result: CLIArgs = {
-    url: args[0],
+    url,
   };
 
   if (options.outputDir) {
@@ -72,6 +81,10 @@ export function parseCLIArgs(): CLIArgs {
 
   if (options.outputCurl) {
     result.outputCurl = true;
+  }
+
+  if (options.flatDir) {
+    result.flatDir = true;
   }
 
   return result;

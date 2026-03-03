@@ -12,6 +12,7 @@ export interface CLIArgs {
   renameSequence?: string;
   verbose?: boolean;
   outputCurl?: boolean;
+  flatDir?: boolean;
 }
 
 export interface NetworkRequest {
@@ -35,6 +36,7 @@ export interface ProtocolHandlerOptions {
   renameSequence?: string;
   verbose?: boolean;
   outputCurl?: boolean;
+  flatDir?: boolean;
   uiView?: WebContentsView | null | undefined;
   webView?: WebContentsView | null | undefined;
   sourceUrls: Set<string>;
@@ -44,4 +46,12 @@ export interface ProtocolHandlerOptions {
 export interface SourceUrl {
   url: string;
   timestamp: number;
+}
+
+export interface NetworkRequestData {
+  id: number;
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  statusCode?: number;
 }

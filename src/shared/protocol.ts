@@ -3,7 +3,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import type { WebContentsView } from 'electron';
 import type { ProtocolHandlerOptions } from './types.ts';
-import { generateFilename, generateSequentialFilename, isEligible, generateCurl } from './utils.ts';
+import {
+  generateFilename,
+  generateFlatFilename,
+  generateSequentialFilename,
+  isEligible,
+  generateCurl,
+} from './utils.ts';
+
+const RESPONSE_WITHOUT_BODY = new Set([204, 304]);
 
 export class ProtocolHandler {
   private outputDir?: string;
@@ -12,6 +20,7 @@ export class ProtocolHandler {
   private renameSequence?: string;
   private verbose?: boolean;
   private outputCurl?: boolean;
+  private flatDir?: boolean;
   private uiView?: WebContentsView;
   private webView?: WebContentsView;
   private sourceUrls: Set<string>;
@@ -31,6 +40,7 @@ export class ProtocolHandler {
     this.renameSequence = options.renameSequence;
     this.verbose = options.verbose;
     this.outputCurl = options.outputCurl;
+    this.flatDir = options.flatDir;
     this.uiView = options.uiView;
     this.webView = options.webView;
     this.sourceUrls = options.sourceUrls;
@@ -45,7 +55,9 @@ export class ProtocolHandler {
   }
 
   register(): void {
-    console.debug('[Protocol API] Registering handlers...');
+    if (this.verbose) {
+      console.debug('[Protocol API] Registering handlers...');
+    }
 
     // Handle HTTPS
     protocol.handle('https', this.handleRequest.bind(this));
@@ -53,12 +65,17 @@ export class ProtocolHandler {
     // Handle HTTP
     protocol.handle('http', this.handleRequest.bind(this));
 
-    console.debug('[Protocol API] Handlers registered successfully');
+    if (this.verbose) {
+      console.debug('[Protocol API] Handlers registered successfully');
+    }
   }
 
   private async handleRequest(request: Request): Promise<Response> {
     const url = request.url;
-    const headersObj = Object.fromEntries(request.headers.entries());
+    const headersObj: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      headersObj[key] = value;
+    });
 
     if (this.verbose) {
       console.debug(`[Request] ${request.method} ${url}`);
@@ -108,47 +125,34 @@ export class ProtocolHandler {
 
       const buffer = Buffer.from(await response.arrayBuffer());
 
-      // Save file only if outputDir is set
-      if (this.outputDir) {
-        // Check if URL is eligible for capture
-        if (!isEligible(url, this.filter, this.selector, this.sourceUrls)) {
-          if (this.verbose) {
-            console.debug(`[Protocol API] Not eligible: ${url}`);
-          }
-          // Still save but don't log
-          const filename = generateFilename(url);
-          const filepath = path.join(this.outputDir, filename);
-          const dirpath = path.dirname(filepath);
-          if (!fs.existsSync(dirpath)) {
-            fs.mkdirSync(dirpath, { recursive: true });
-          }
-          fs.writeFileSync(filepath, buffer);
-        } else {
-          // Save eligible URL
-          const filename =
-            this.renameSequence && this.selector
-              ? generateSequentialFilename(url, this.sourceUrls.size, this.renameSequence)
+      // Check if URL is eligible using single source of truth
+      const eligible = isEligible(url, this.filter, this.selector, this.sourceUrls);
+
+      // Save file only if outputDir is set and URL is eligible
+      if (this.outputDir && eligible) {
+        const filename =
+          this.renameSequence && this.selector
+            ? generateSequentialFilename(url, this.sourceUrls.size, this.renameSequence)
+            : this.flatDir
+              ? generateFlatFilename(url)
               : generateFilename(url);
-          const filepath = path.join(this.outputDir, filename);
-          const dirpath = path.dirname(filepath);
-          if (!fs.existsSync(dirpath)) {
-            fs.mkdirSync(dirpath, { recursive: true });
-          }
-          fs.writeFileSync(filepath, buffer);
-          if (this.verbose) {
-            console.debug(`[Protocol API] Saved: ${filename} (${buffer.length} bytes)`);
-          }
+        const filepath = path.join(this.outputDir, filename);
+        const dirpath = path.dirname(filepath);
+        if (!fs.existsSync(dirpath)) {
+          fs.mkdirSync(dirpath, { recursive: true });
+        }
+        fs.writeFileSync(filepath, buffer);
+        if (this.verbose) {
+          console.debug(`[Protocol API] Saved: ${filename} (${buffer.length} bytes)`);
         }
       }
 
-      // Print curl command if outputCurl is enabled and URL matches filter (if any)
-      if (this.outputCurl) {
-        if (!this.filter || this.filter.test(url)) {
-          const curl = generateCurl(request.method, url, headersObj);
-          console.log(`\n${'='.repeat(80)}`);
-          console.log(curl);
-          console.log(`${'='.repeat(80)}\n`);
-        }
+      // Print curl command if outputCurl is enabled and URL is eligible
+      if (this.outputCurl && eligible) {
+        const curl = generateCurl(request.method, url, headersObj);
+        process.stdout.write(`\n${'='.repeat(80)}\n`);
+        process.stdout.write(curl);
+        process.stdout.write(`\n${'='.repeat(80)}\n\n`);
       }
 
       // Send request complete event to UI panel (always)
@@ -169,14 +173,7 @@ export class ProtocolHandler {
       this.activeRequests.delete(url);
 
       // Return ORIGINAL response (unchanged)
-      // Status codes 204 and 304 cannot have a body
-      if (response.status === 204 || response.status === 304) {
-        return new Response(null, {
-          status: response.status,
-          headers: response.headers,
-        });
-      }
-      return new Response(buffer, {
+      return new Response(RESPONSE_WITHOUT_BODY.has(response.status) ? null : buffer, {
         status: response.status,
         headers: response.headers,
       });
@@ -218,9 +215,9 @@ export class ProtocolHandler {
       .map(([k, v]) => `-H "${this.escapeCurl(k)}: ${this.escapeCurl(v)}"`)
       .join(' ');
 
-    console.log(`\n${'='.repeat(80)}`);
-    console.log(`curl -X ${method} ${headerArgs} "${this.escapeCurl(url)}"`);
-    console.log(`${'='.repeat(80)}\n`);
+    process.stdout.write(`\n${'='.repeat(80)}\n`);
+    process.stdout.write(`curl -X ${method} ${headerArgs} "${this.escapeCurl(url)}"`);
+    process.stdout.write(`\n${'='.repeat(80)}\n\n`);
   }
 
   private escapeCurl(text: string): string {

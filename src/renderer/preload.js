@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+import { contextBridge, ipcRenderer } from 'electron';
 
 const IPC_CHANNELS = {
   networkRequestStart: 'network-request-start',
@@ -13,10 +13,12 @@ const IPC_CHANNELS = {
 };
 
 contextBridge.exposeInMainWorld('api', {
-  onNetworkRequestStart: (callback) =>
-    ipcRenderer.on(IPC_CHANNELS.networkRequestStart, (_, data) => callback(data)),
-  onNetworkRequestComplete: (callback) =>
-    ipcRenderer.on(IPC_CHANNELS.networkRequestComplete, (_, data) => callback(data)),
+  onNetworkRequestStart: (callback) => {
+    ipcRenderer.on(IPC_CHANNELS.networkRequestStart, (_, data) => callback(data));
+  },
+  onNetworkRequestComplete: (callback) => {
+    ipcRenderer.on(IPC_CHANNELS.networkRequestComplete, (_, data) => callback(data));
+  },
   copyToClipboard: (text) => ipcRenderer.invoke(IPC_CHANNELS.copyToClipboard, text),
   getPageSource: () => ipcRenderer.invoke(IPC_CHANNELS.getPageSource),
   applySelector: () => ipcRenderer.invoke(IPC_CHANNELS.applySelector),

@@ -7,14 +7,14 @@ import {
   clipboard,
   globalShortcut,
 } from 'electron';
-import type { WebContents } from 'electron';
-import path from 'node:path';
-import fs from 'node:fs';
-import { parseCLIArgs } from '../shared/cli.ts';
 import { AutomationManager } from '../shared/automation.ts';
-import { ProtocolHandler } from '../shared/protocol.ts';
 import { extractSourceUrls, normalizeUrl } from '../shared/utils.ts';
+import { parseCLIArgs } from '../shared/cli.ts';
+import { ProtocolHandler } from '../shared/protocol.ts';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { CLIArgs } from '../shared/types.ts';
+import type { WebContents } from 'electron';
 
 let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
@@ -38,6 +38,32 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
 
   win.contentView.addChildView(webView);
   webView.setVisible(true);
+
+  // Inject dark scrollbar CSS for web view
+  webView.webContents.on('did-finish-load', () => {
+    webView?.webContents.executeJavaScript(`
+      (function() {
+        const style = document.createElement('style');
+        style.textContent = \`
+          ::-webkit-scrollbar {
+            width: 12px;
+          }
+          ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+          }
+          ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 6px;
+            border: 3px solid #1a1a1a;
+          }
+          ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+          }
+        \`;
+        document.head.appendChild(style);
+      })();
+    `);
+  });
 
   // Load URL in the web view
   if (cliArgs.url) {
@@ -106,13 +132,13 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
 
   // Keyboard navigation - Alt+Left/Right for back/forward
   globalShortcut.register('Alt+Left', () => {
-    if (webView && webView.webContents.canGoBack()) {
-      webView.webContents.goBack();
+    if (webView?.webContents.navigationHistory.canGoBack()) {
+      webView.webContents.navigationHistory.goBack();
     }
   });
   globalShortcut.register('Alt+Right', () => {
-    if (webView && webView.webContents.canGoForward()) {
-      webView.webContents.goForward();
+    if (webView?.webContents.navigationHistory.canGoForward()) {
+      webView.webContents.navigationHistory.goForward();
     }
   });
 
@@ -204,19 +230,8 @@ app.whenReady().then(async () => {
 
   const cliArgs = parseCLIArgs();
 
-  // Set default user agent to Chromium without Electron branding BEFORE creating window
-  const defaultUserAgent = app.userAgentFallback;
-  const chromeVersion = process.versions.chrome;
-  const chromeVersionPlaceholder = chromeVersion
-    .split('.')
-    .map((v, idx) => (idx === 0 ? v : '0'))
-    .join('.');
-  let newUserAgent = defaultUserAgent
-    .replace(/Min\/\S+\s/g, '')
-    .replace(/Electron\/\S+\s/g, '')
-    .replace(/initialxy-scraper\/\S+\s/g, '')
-    .replace(chromeVersion, chromeVersionPlaceholder);
-  app.userAgentFallback = newUserAgent;
+  // Sanitize this app's own name from user agent.
+  app.userAgentFallback = app.userAgentFallback.replace(app.getName(), '');
 
   const { win } = createWindow(cliArgs);
 
