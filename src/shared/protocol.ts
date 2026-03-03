@@ -169,6 +169,13 @@ export class ProtocolHandler {
       this.activeRequests.delete(url);
 
       // Return ORIGINAL response (unchanged)
+      // Status codes 204 and 304 cannot have a body
+      if (response.status === 204 || response.status === 304) {
+        return new Response(null, {
+          status: response.status,
+          headers: response.headers,
+        });
+      }
       return new Response(buffer, {
         status: response.status,
         headers: response.headers,
