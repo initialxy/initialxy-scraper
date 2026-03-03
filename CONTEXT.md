@@ -194,25 +194,27 @@ src/renderer/ui/ui_panel.ts → src/renderer/ui/ui_panel.js (4.66 kB)
 
 **Preload Script**: `src/renderer/preload.js` exposes `window.api` with safe IPC methods including `generateCurl()` for cURL generation.
 
+**FFmpeg Support**: `.m3u8` files trigger ffmpeg command generation instead of cURL, with HLS streaming options and header support.
+
 ---
 
 ## Key Files
 
-| File                              | Purpose                                                               |
-| --------------------------------- | --------------------------------------------------------------------- |
-| `src/main/main.ts`                | BaseWindow + WebContentsView setup, Protocol API, navigationHistory   |
-| `src/renderer/ui/ui_panel.html`   | Right panel UI structure                                              |
-| `src/renderer/ui/ui_panel.css`    | Right panel styles                                                    |
-| `src/renderer/ui/ui_panel.ts`     | Right panel logic (compiled by Vite)                                  |
-| `src/renderer/ui/ui_panel.js`     | Compiled output (auto-generated)                                      |
-| `src/renderer/index.html`         | Legacy browser view (not used in current impl)                        |
-| `src/renderer/index.css`          | Legacy browser styles                                                 |
-| `src/renderer/preload.js`         | Preload script for IPC + generateCurl()                               |
-| `src/shared/protocol.ts`          | ProtocolHandler class with isEligible()                               |
-| `src/shared/backend_utils.ts`     | Node.js utilities (extractSourceUrls, isEligible, etc. with jsdom)    |
-| `src/shared/cross_stack_utils.ts` | Shared functions (generateCurl, escapeCurl) for both backend/renderer |
-| `src/shared/cli.ts`               | CLI argument parsing                                                  |
-| `src/shared/automation.ts`        | AutomationManager class                                               |
+| File                              | Purpose                                                                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `src/main/main.ts`                | BaseWindow + WebContentsView setup, Protocol API, navigationHistory                                  |
+| `src/renderer/ui/ui_panel.html`   | Right panel UI structure                                                                             |
+| `src/renderer/ui/ui_panel.css`    | Right panel styles                                                                                   |
+| `src/renderer/ui/ui_panel.ts`     | Right panel logic (compiled by Vite)                                                                 |
+| `src/renderer/ui/ui_panel.js`     | Compiled output (auto-generated)                                                                     |
+| `src/renderer/index.html`         | Legacy browser view (not used in current impl)                                                       |
+| `src/renderer/index.css`          | Legacy browser styles                                                                                |
+| `src/renderer/preload.js`         | Preload script for IPC + generateCurl()                                                              |
+| `src/shared/protocol.ts`          | ProtocolHandler class with isEligible()                                                              |
+| `src/shared/backend_utils.ts`     | Node.js utilities (extractSourceUrls, isEligible, etc. with jsdom)                                   |
+| `src/shared/cross_stack_utils.ts` | Shared functions (generateCurl, generateFFmpegCommand, escapeCurl, isM3u8) for both backend/renderer |
+| `src/shared/cli.ts`               | CLI argument parsing                                                                                 |
+| `src/shared/automation.ts`        | AutomationManager class                                                                              |
 
 ---
 
@@ -268,3 +270,4 @@ npm run electron:dev
 18. **Protocol handler timing** - Load about:blank first, register protocol handler, then navigate to target URL (ensures initial HTML captured)
 19. **NPM scripts** - `npm start` builds + launches Electron, `npm run dev` starts Vite dev server, `npm run electron:dev` builds + launches Electron with logging
 20. **ui directory** - ui_panel.\* files moved to src/renderer/ui/ to avoid ignoring preload.js in .gitignore
+21. **FFmpeg for .m3u8** - Automatic detection and ffmpeg command generation for HLS playlist files

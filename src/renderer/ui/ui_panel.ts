@@ -1,4 +1,4 @@
-import { generateCurl } from '../../shared/cross_stack_utils.ts';
+import { generateCurl, generateFFmpegCommand, isM3u8 } from '../../shared/cross_stack_utils.ts';
 import type { NetworkRequestData } from '../../shared/types.ts';
 
 interface Api {
@@ -66,21 +66,30 @@ class NetworkMonitor {
       row.className = 'request-row';
       row.dataset.id = data.id.toString();
       row.dataset.url = data.url;
+      const isM3u8File = isM3u8(data.url);
+      const copyText = isM3u8File ? 'Click to copy ffmpeg' : 'Click to copy cURL';
+
       row.innerHTML = `
         <div class="content">
           <span class="method">${data.method}</span>
           <span class="status"></span>
           <span class="url">${data.url}</span>
         </div>
-        <div class="tooltip">${data.url}</div>
+        <div class="tooltip">${data.url}<br/><span class="hint">${copyText}</span></div>
       `;
       this.requests.set(data.id, { row, data });
 
       row.addEventListener('click', async () => {
-        const curl = generateCurl(data.method, data.url, data.headers);
-        await window.api.copyToClipboard(curl);
+        const text = isM3u8(data.url)
+          ? generateFFmpegCommand(data.url, data.headers)
+          : generateCurl(data.method, data.url, data.headers);
+        const isM3u8File = isM3u8(data.url);
 
-        this.showToast('cURL copied to clipboard');
+        await window.api.copyToClipboard(text);
+
+        this.showToast(
+          isM3u8File ? 'ffmpeg command copied to clipboard' : 'cURL copied to clipboard'
+        );
         row.classList.add('copied');
         setTimeout(() => row.classList.remove('copied'), 300);
       });

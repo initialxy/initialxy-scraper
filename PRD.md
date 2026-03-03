@@ -77,8 +77,9 @@ initialxy-scraper is a minimal Electron-based web browser designed for network m
 
 **Request Row Interaction**:
 
-- Click row to copy cURL command to clipboard
-- cURL includes: HTTP method, URL, all request headers
+- Click row to copy command to clipboard
+- For `.m3u8` files: Copies ffmpeg command with HLS streaming options
+- For other files: Copies cURL command (HTTP method, URL, all request headers)
 - Visual feedback: Row flashes green on successful copy
 
 **Copy Page Source Button**:
@@ -316,6 +317,20 @@ curl -X <METHOD> "<URL>" \
 - Properly escape special characters
 - Request body NOT required
 
+### FFmpeg Generation (for .m3u8 files)
+
+Format:
+
+```bash
+ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -extension_picky 0 -readrate 4 -i "<URL>" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 300000000 -headers 'User-Agent: <user-agent>' -acodec copy -bsf:a aac_adtstoasc -vcodec copy out.mp4
+```
+
+- Includes all HTTP headers except User-Agent (which is separate)
+- HLS streaming optimized with reconnect logic
+- Read rate limiting for smooth streaming
+- Copies audio and video codecs without re-encoding
+- Detects `.m3u8` extension automatically
+
 ## Out of Scope
 
 - Multi-tab support
@@ -360,6 +375,7 @@ curl -X <METHOD> "<URL>" \
 - [ ] Visual distinction: faded (pending) vs solid (complete)
 - [ ] URL filter works in real-time
 - [ ] Click row copies valid cURL to clipboard with flash feedback
+- [ ] Click row copies ffmpeg command for .m3u8 files with flash feedback
 - [ ] "Copy Page Source" button works with flash feedback
 - [ ] Panel auto-clears on page navigation
 - [ ] Dark theme matches minimal aesthetic
