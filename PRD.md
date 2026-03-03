@@ -93,16 +93,18 @@ Command-line arguments for automated web scraping. Browser remains visible (not 
 
 #### Arguments
 
-| Argument            | Shorthand | Type   | Description                                           |
-| ------------------- | --------- | ------ | ----------------------------------------------------- |
-| `--output`          | `-o`      | string | Output directory for scraped responses (auto-created) |
-| `--filter`          | `-f`      | string | Regex URL filter for eligible responses               |
-| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM       |
-| `--wait`            | `-w`      | number | Wait time in seconds after page load                  |
-| `--scroll`          | `-r`      | number | Pixels to scroll down every second                    |
-| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                |
-| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)    |
-| `--url`             | `-u`      | string | Initial URL to navigate to (required for CLI mode)    |
+| Argument            | Shorthand | Type   | Description                                                       |
+| ------------------- | --------- | ------ | ----------------------------------------------------------------- |
+| `[URL]`             | -         | string | Initial URL to navigate to (required, positional argument)        |
+| `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)             |
+| `--output-curl`     | -         | bool   | Output cURL commands to stdout (works with --filter)              |
+| `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl) |
+| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                   |
+| `--wait`            | `-w`      | number | Wait time in seconds after page load                              |
+| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                |
+| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                            |
+| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                |
+| `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                            |
 
 #### Eligibility Logic
 
@@ -161,21 +163,36 @@ Timer is independent of `--scroll` and does NOT reset on new discoveries.
 #### Examples
 
 ```bash
-# Dump all responses
-initialxy-scraper --output ./downloads --url https://example.com
+# Basic browser mode
+initialxy-scraper https://example.com
 
-# Filter by extension
-initialxy-scraper --filter "\.jpg$|\.png$" --output ./images --url https://example.com
+# Dump all responses to directory
+initialxy-scraper --output-dir ./downloads https://example.com
+
+# Filter by extension and save
+initialxy-scraper --filter "\.jpg$|\.png$" --output-dir ./images https://example.com
+
+# Output cURL commands to stdout
+initialxy-scraper --output-curl https://example.com
+
+# Filter cURL output by URL pattern
+initialxy-scraper --output-curl --filter "api\.example\.com" https://example.com
+
+# Both file saving and cURL output together
+initialxy-scraper --output-dir ./assets --output-curl --filter "\.json$" https://example.com
 
 # Extract from selector with wait
-initialxy-scraper --selector "img.lazy" --wait 5 --output ./assets --url https://example.com
+initialxy-scraper --selector "img.lazy" --wait 5 --output-dir ./assets https://example.com
 
 # Scroll for lazy loading
-initialxy-scraper --scroll 100 --wait 3 --close-on-idle 10 --output ./all --url https://example.com
+initialxy-scraper --scroll 100 --wait 3 --close-on-idle 10 --output-dir ./all https://example.com
 
 # Sequential naming (preserves DOM order)
-initialxy-scraper --selector "img" --rename-sequence 05d --output ./images --url https://example.com
+initialxy-scraper --selector "img" --rename-sequence 05d --output-dir ./images https://example.com
 # Output: 00001.jpg, 00002.png, 00003.gif
+
+# Verbose mode for debugging
+initialxy-scraper --verbose --output-dir ./debug https://example.com
 ```
 
 ### 3. Keyboard Navigation
@@ -238,23 +255,23 @@ Main Process (main.js)
 **Modern API (Electron 25+)**: Use `protocol.handle()` - NOT deprecated `registerBufferProtocol()`
 
 ```javascript
-const { protocol, net } = require("electron");
-const fs = require("fs");
+const { protocol, net } = require('electron');
+const fs = require('fs');
 
 app.whenReady().then(() => {
-  protocol.handle("https", async (request) => {
+  protocol.handle('https', async (request) => {
     // Forward request and capture response
     const response = await net.fetch(request.url, {
       method: request.method,
       headers: request.headers,
     });
-    
+
     const buffer = Buffer.from(await response.arrayBuffer());
-    
+
     // Save to disk
     const filename = generateFilename(request.url);
     fs.writeFileSync(path.join(outputDir, filename), buffer);
-    
+
     // Return ORIGINAL response (unchanged)
     return new Response(buffer, {
       status: response.status,
@@ -265,6 +282,7 @@ app.whenReady().then(() => {
 ```
 
 **Critical Requirements**:
+
 - Register in `app.whenReady()` - BEFORE any navigation
 - Use `net.fetch()` to forward request - do NOT block/modify
 - Return `Response` object with original status/headers

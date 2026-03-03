@@ -189,15 +189,31 @@ webView.webContents.executeJavaScript("document.querySelector('.selector').inner
 
 ---
 
-## CLI Arguments (Future)
+## CLI Arguments
 
-| Arg                 | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `--output` / `-o`   | Enable Protocol API, save responses to dir |
-| `--filter` / `-f`   | Regex URL filter for eligible responses    |
-| `--selector` / `-s` | CSS selector for src attribute extraction  |
-| `--wait` / `-w`     | Wait seconds after page load               |
-| `[URL]`             | Initial URL to load                        |
+**Parser**: `commander` package (replaced custom parser for better `--help` and validation)
+
+| Arg                 | Shorthand | Type   | Purpose                                                           |
+| ------------------- | --------- | ------ | ----------------------------------------------------------------- |
+| `[URL]`             | -         | string | Initial URL to load (required, positional)                        |
+| `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)             |
+| `--output-curl`     | -         | bool   | Output cURL commands to stdout                                    |
+| `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl) |
+| `--selector`        | `-s`      | string | CSS selector for src attribute extraction                         |
+| `--wait`            | `-w`      | number | Wait seconds after page load                                      |
+| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                |
+| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                            |
+| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                |
+| `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                            |
+
+**Key Behaviors**:
+
+- Protocol API **always registered** for network monitoring (UI panel always works)
+- `--output-dir` only triggers file saving (adds overhead)
+- `--output-curl` outputs cURL commands to stdout (no file I/O)
+- `--filter` applies to both `--output-dir` AND `--output-curl`
+- Both `--output-dir` and `--output-curl` can be used together
+- `--verbose` enables network traffic logging (off by default to reduce noise)
 
 ---
 
@@ -207,8 +223,20 @@ webView.webContents.executeJavaScript("document.querySelector('.selector').inner
 # Basic browser
 npm start -- https://google.com
 
-# With scraping (future)
-npm start -- --output ./scraped https://example.com
+# Save responses to directory
+npm start -- --output-dir ./scraped https://example.com
+
+# Output cURL commands to stdout
+npm start -- --output-curl https://example.com
+
+# Filter cURL output
+npm start -- --output-curl --filter "api\.example\.com" https://example.com
+
+# Both file saving and cURL output
+npm start -- --output-dir ./assets --output-curl --filter "\.json$" https://example.com
+
+# Verbose mode
+npm start -- --verbose --output-dir ./debug https://example.com
 ```
 
 ---

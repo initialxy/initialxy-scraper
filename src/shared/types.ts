@@ -10,6 +10,8 @@ export interface CLIArgs {
   scroll?: number;
   closeOnIdle?: number;
   renameSequence?: string;
+  verbose?: boolean;
+  outputCurl?: boolean;
 }
 
 export interface NetworkRequest {
@@ -27,10 +29,12 @@ export interface CompletedStatus {
 }
 
 export interface ProtocolHandlerOptions {
-  outputDir: string;
+  outputDir?: string;
   filter?: RegExp;
   selector?: string;
   renameSequence?: string;
+  verbose?: boolean;
+  outputCurl?: boolean;
   uiView?: WebContentsView | null | undefined;
   webView?: WebContentsView | null | undefined;
   sourceUrls: Set<string>;

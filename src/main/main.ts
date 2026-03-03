@@ -6,7 +6,6 @@ import {
   ipcMain,
   clipboard,
   globalShortcut,
-  protocol,
 } from 'electron';
 import type { WebContents } from 'electron';
 import path from 'node:path';
@@ -168,25 +167,25 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
     };
   });
 
-  let protocolHandler: ProtocolHandler | undefined;
+  // Always create ProtocolHandler for network monitoring
+  // File saving only happens when outputDir is set
+  const sourceUrls = new Set<string>();
+  const completedSourceUrls = new Set<string>();
 
-  if (cliArgs.outputDir) {
-    const sourceUrls = new Set<string>();
-    const completedSourceUrls = new Set<string>();
+  const protocolHandler = new ProtocolHandler({
+    outputDir: cliArgs.outputDir,
+    filter: cliArgs.filter,
+    selector: cliArgs.selector,
+    renameSequence: cliArgs.renameSequence,
+    verbose: cliArgs.verbose,
+    outputCurl: cliArgs.outputCurl,
+    uiView,
+    webView,
+    sourceUrls,
+    completedSourceUrls,
+  });
 
-    protocolHandler = new ProtocolHandler({
-      outputDir: cliArgs.outputDir,
-      filter: cliArgs.filter,
-      selector: cliArgs.selector,
-      renameSequence: cliArgs.renameSequence,
-      uiView,
-      webView,
-      sourceUrls,
-      completedSourceUrls,
-    });
-
-    protocolHandler.register();
-  }
+  protocolHandler.register();
 
   return { win, protocolHandler };
 }
@@ -204,7 +203,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
 
   const cliArgs = parseCLIArgs();
-  const { win, protocolHandler } = createWindow(cliArgs);
+  const { win } = createWindow(cliArgs);
 
   // Initialize automation manager after window is created
   if (webView?.webContents) {

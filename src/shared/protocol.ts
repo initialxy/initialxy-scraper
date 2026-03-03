@@ -3,13 +3,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import type { WebContentsView } from 'electron';
 import type { ProtocolHandlerOptions } from './types.ts';
-import { generateFilename, generateSequentialFilename, isEligible } from './utils.ts';
+import { generateFilename, generateSequentialFilename, isEligible, generateCurl } from './utils.ts';
 
 export class ProtocolHandler {
-  private outputDir: string;
+  private outputDir?: string;
   private filter?: RegExp;
   private selector?: string;
   private renameSequence?: string;
+  private verbose?: boolean;
+  private outputCurl?: boolean;
   private uiView?: WebContentsView;
   private webView?: WebContentsView;
   private sourceUrls: Set<string>;
@@ -27,6 +29,8 @@ export class ProtocolHandler {
     this.filter = options.filter;
     this.selector = options.selector;
     this.renameSequence = options.renameSequence;
+    this.verbose = options.verbose;
+    this.outputCurl = options.outputCurl;
     this.uiView = options.uiView;
     this.webView = options.webView;
     this.sourceUrls = options.sourceUrls;
@@ -56,11 +60,15 @@ export class ProtocolHandler {
     const url = request.url;
     const headersObj = Object.fromEntries(request.headers.entries());
 
-    console.debug(`[Request] ${request.method} ${url}`);
+    if (this.verbose) {
+      console.debug(`[Request] ${request.method} ${url}`);
+    }
 
     // Prevent infinite recursion
     if (this.processingUrls.has(url)) {
-      console.debug(`[Protocol API] Skipping recursive request: ${url}`);
+      if (this.verbose) {
+        console.debug(`[Protocol API] Skipping recursive request: ${url}`);
+      }
       // Make a direct fetch without going through protocol handler
       const response = await fetch(url, {
         method: request.method,
@@ -87,7 +95,9 @@ export class ProtocolHandler {
     // Send request start event to UI panel
     this.sendNetworkEvent('start', requestId, url, request.method, headersObj);
 
-    console.debug(`[Protocol API] Capturing: ${url}`);
+    if (this.verbose) {
+      console.debug(`[Protocol API] Capturing: ${url}`);
+    }
 
     try {
       // Forward request using bypass session (no protocol handler)
@@ -98,33 +108,50 @@ export class ProtocolHandler {
 
       const buffer = Buffer.from(await response.arrayBuffer());
 
-      // Check if URL is eligible for capture
-      if (!isEligible(url, this.filter, this.selector, this.sourceUrls)) {
-        console.debug(`[Protocol API] Not eligible: ${url}`);
-        // Still save but don't log
-        const filename = generateFilename(url);
-        const filepath = path.join(this.outputDir, filename);
-        const dirpath = path.dirname(filepath);
-        if (!fs.existsSync(dirpath)) {
-          fs.mkdirSync(dirpath, { recursive: true });
+      // Save file only if outputDir is set
+      if (this.outputDir) {
+        // Check if URL is eligible for capture
+        if (!isEligible(url, this.filter, this.selector, this.sourceUrls)) {
+          if (this.verbose) {
+            console.debug(`[Protocol API] Not eligible: ${url}`);
+          }
+          // Still save but don't log
+          const filename = generateFilename(url);
+          const filepath = path.join(this.outputDir, filename);
+          const dirpath = path.dirname(filepath);
+          if (!fs.existsSync(dirpath)) {
+            fs.mkdirSync(dirpath, { recursive: true });
+          }
+          fs.writeFileSync(filepath, buffer);
+        } else {
+          // Save eligible URL
+          const filename =
+            this.renameSequence && this.selector
+              ? generateSequentialFilename(url, this.sourceUrls.size, this.renameSequence)
+              : generateFilename(url);
+          const filepath = path.join(this.outputDir, filename);
+          const dirpath = path.dirname(filepath);
+          if (!fs.existsSync(dirpath)) {
+            fs.mkdirSync(dirpath, { recursive: true });
+          }
+          fs.writeFileSync(filepath, buffer);
+          if (this.verbose) {
+            console.debug(`[Protocol API] Saved: ${filename} (${buffer.length} bytes)`);
+          }
         }
-        fs.writeFileSync(filepath, buffer);
-      } else {
-        // Save eligible URL
-        const filename =
-          this.renameSequence && this.selector
-            ? generateSequentialFilename(url, this.sourceUrls.size, this.renameSequence)
-            : generateFilename(url);
-        const filepath = path.join(this.outputDir, filename);
-        const dirpath = path.dirname(filepath);
-        if (!fs.existsSync(dirpath)) {
-          fs.mkdirSync(dirpath, { recursive: true });
-        }
-        fs.writeFileSync(filepath, buffer);
-        console.debug(`[Protocol API] Saved: ${filename} (${buffer.length} bytes)`);
       }
 
-      // Send request complete event to UI panel
+      // Print curl command if outputCurl is enabled and URL matches filter (if any)
+      if (this.outputCurl) {
+        if (!this.filter || this.filter.test(url)) {
+          const curl = generateCurl(request.method, url, headersObj);
+          console.log(`\n${'='.repeat(80)}`);
+          console.log(curl);
+          console.log(`${'='.repeat(80)}\n`);
+        }
+      }
+
+      // Send request complete event to UI panel (always)
       this.sendNetworkEvent(
         'complete',
         requestId,
@@ -177,6 +204,20 @@ export class ProtocolHandler {
     };
 
     this.uiView.webContents.send(`network-request-${eventType}`, data);
+  }
+
+  private printCurlCommand(method: string, url: string, headers: Record<string, string>): void {
+    const headerArgs = Object.entries(headers)
+      .map(([k, v]) => `-H "${this.escapeCurl(k)}: ${this.escapeCurl(v)}"`)
+      .join(' ');
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`curl -X ${method} ${headerArgs} "${this.escapeCurl(url)}"`);
+    console.log(`${'='.repeat(80)}\n`);
+  }
+
+  private escapeCurl(text: string): string {
+    return text.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
   }
 
   getActiveRequests(): Map<

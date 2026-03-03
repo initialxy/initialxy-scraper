@@ -179,9 +179,10 @@
       });
 
       function generateCurl(data) {
-        const headers = Object.entries(data.headers)
+        const headerEntries = Object.entries(data.headers);
+        const headers = headerEntries
           .map(([k, v]) => `  -H "${escapeCurl(k)}: ${escapeCurl(v)}"`)
-          .join('\n');
+          .join(' \\\n');
         return `curl -X ${data.method} "${escapeCurl(data.url)}" \\\n${headers}`;
       }
 

@@ -13,13 +13,15 @@ export function parseCLIArgs(): CLIArgs {
     .description('GUI browser with scraping capabilities')
     .version('1.0.0')
     .argument('<url>', 'URL to load (required)')
-    .option('-o, --output <dir>', 'Output directory for scraped files')
-    .option('-f, --filter <regex>', 'URL filter regex for eligible responses')
+    .option('-o, --output-dir <dir>', 'Output directory for scraped files')
+    .option('-f, --filter <regex>', 'URL filter regex for selecting responses')
     .option('-s, --selector <selector>', 'CSS selector for src attribute extraction')
     .option('-w, --wait <seconds>', 'Wait seconds after page load before closing')
     .option('-r, --scroll <pixels>', 'Scroll down by pixels (0 = scroll to bottom)')
     .option('-c, --close-on-idle <seconds>', 'Close window after N seconds of network idle')
-    .option('--rename-sequence <pattern>', 'Rename pattern for scraped files');
+    .option('--rename-sequence <pattern>', 'Rename pattern for scraped files')
+    .option('-v, --verbose', 'Enable verbose logging for network traffic')
+    .option('--output-curl', 'Output curl commands for matching URLs to stdout');
 
   program.parse();
 
@@ -36,8 +38,8 @@ export function parseCLIArgs(): CLIArgs {
     url: args[0],
   };
 
-  if (options.output) {
-    result.outputDir = path.resolve(process.cwd(), options.output);
+  if (options.outputDir) {
+    result.outputDir = path.resolve(process.cwd(), options.outputDir);
   }
 
   if (options.filter) {
@@ -62,6 +64,14 @@ export function parseCLIArgs(): CLIArgs {
 
   if (options.renameSequence) {
     result.renameSequence = options.renameSequence;
+  }
+
+  if (options.verbose) {
+    result.verbose = true;
+  }
+
+  if (options.outputCurl) {
+    result.outputCurl = true;
   }
 
   return result;
