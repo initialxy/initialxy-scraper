@@ -212,6 +212,7 @@ app.whenReady().then(async () => {
   let newUserAgent = defaultUserAgent
     .replace(/Min\/\S+\s/g, '')
     .replace(/Electron\/\S+\s/g, '')
+    .replace(/initialxy-scraper\/\S+\s/g, '')
     .replace(chromeVersion, chromeVersionPlaceholder);
   app.userAgentFallback = newUserAgent;
 
