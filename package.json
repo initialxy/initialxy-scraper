@@ -7,8 +7,9 @@
   "type": "module",
   "main": "src/main/main.ts",
   "scripts": {
-    "start": "electron .",
+    "start": "npm run build:ui && electron .",
     "dev": "electron . --enable-logging",
+    "build:ui": "vite build",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts",
@@ -30,6 +31,7 @@
     "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
   }
 }

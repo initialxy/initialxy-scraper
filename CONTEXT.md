@@ -4,7 +4,8 @@
 **Electron**: 40.6.1  
 **Node**: 24.x+  
 **TypeScript**: 5.9.3 (native Node.js support)  
-**jsdom**: Latest (DOM parsing for source extraction)
+**jsdom**: Latest (DOM parsing for source extraction)  
+**Vite**: 7.3.1 (frontend build tool)
 
 ---
 
@@ -29,10 +30,17 @@ BaseWindow (1200x800, autoHideMenuBar: true)
         ├─ IPC - Main ↔ Renderer communication
         └─ Shared Modules (src/shared/)
             ├─ types.ts - Shared TypeScript interfaces
-            ├─ utils.ts - Utility functions (generateCurl, isEligible, etc.)
+            ├─ backend_utils.ts - Node.js/Electron utilities (jsdom, path, etc.)
+            ├─ cross_stack_utils.ts - Shared functions (generateCurl, escapeCurl)
             ├─ protocol.ts - ProtocolHandler class
             ├─ cli.ts - CLI argument parsing
             └─ automation.ts - AutomationManager class
+```
+
+**Frontend Build** (Vite):
+
+```
+src/renderer/ui_panel.ts → src/renderer/ui_panel.js (4.66 kB)
 ```
 
 **Key Implementation Details**:
@@ -97,8 +105,10 @@ BaseWindow (1200x800, autoHideMenuBar: true)
 
 **Files**:
 
-- `src/renderer/ui-panel.html` - Panel structure
-- `src/renderer/ui-panel.css` - Panel styles (extracted from HTML)
+- `src/renderer/ui_panel.html` - Panel structure
+- `src/renderer/ui_panel.css` - Panel styles (extracted from HTML)
+- `src/renderer/ui_panel.ts` - Panel logic (compiled by Vite)
+- `src/renderer/ui_panel.js` - Compiled output (auto-generated)
 - `src/renderer/preload.js` - Exposes `window.api.generateCurl()` to renderer
 
 ---
@@ -186,25 +196,28 @@ BaseWindow (1200x800, autoHideMenuBar: true)
 
 ## Key Files
 
-| File                         | Purpose                                                                    |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `src/main/main.ts`           | BaseWindow + WebContentsView setup, Protocol API, navigationHistory        |
-| `src/renderer/ui-panel.html` | Right panel UI structure                                                   |
-| `src/renderer/ui-panel.css`  | Right panel styles                                                         |
-| `src/renderer/index.html`    | Legacy browser view (not used in current impl)                             |
-| `src/renderer/index.css`     | Legacy browser styles                                                      |
-| `src/renderer/preload.js`    | Preload script for IPC + generateCurl()                                    |
-| `src/shared/protocol.ts`     | ProtocolHandler class with isEligible()                                    |
-| `src/shared/utils.ts`        | Utility functions (generateCurl, isEligible, extractSourceUrls with jsdom) |
-| `src/shared/cli.ts`          | CLI argument parsing                                                       |
-| `src/shared/automation.ts`   | AutomationManager class                                                    |
+| File                              | Purpose                                                               |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `src/main/main.ts`                | BaseWindow + WebContentsView setup, Protocol API, navigationHistory   |
+| `src/renderer/ui_panel.html`      | Right panel UI structure                                              |
+| `src/renderer/ui_panel.css`       | Right panel styles                                                    |
+| `src/renderer/ui_panel.ts`        | Right panel logic (compiled by Vite)                                  |
+| `src/renderer/ui_panel.js`        | Compiled output (auto-generated)                                      |
+| `src/renderer/index.html`         | Legacy browser view (not used in current impl)                        |
+| `src/renderer/index.css`          | Legacy browser styles                                                 |
+| `src/renderer/preload.js`         | Preload script for IPC + generateCurl()                               |
+| `src/shared/protocol.ts`          | ProtocolHandler class with isEligible()                               |
+| `src/shared/backend_utils.ts`     | Node.js utilities (extractSourceUrls, isEligible, etc. with jsdom)    |
+| `src/shared/cross_stack_utils.ts` | Shared functions (generateCurl, escapeCurl) for both backend/renderer |
+| `src/shared/cli.ts`               | CLI argument parsing                                                  |
+| `src/shared/automation.ts`        | AutomationManager class                                               |
 
 ---
 
 ## Testing
 
 ```bash
-# Basic browser
+# Basic browser (auto-builds UI)
 npm start -- https://google.com
 
 # Save responses to directory
@@ -221,6 +234,9 @@ npm start -- --output-dir ./assets --output-curl --filter "\.json$" https://exam
 
 # Verbose mode
 npm start -- --verbose --output-dir ./debug https://example.com
+
+# Build UI panel manually
+npm run build:ui
 ```
 
 ---
@@ -236,10 +252,11 @@ npm start -- --verbose --output-dir ./debug https://example.com
 7. **No DevTools** - all via Electron APIs
 8. **jsdom for DOM parsing** - NOT inline JavaScript injection in extractSourceUrls()
 9. **isEligible() as single source of truth** - Unified filtering for --output-dir and --output-curl
-10. **TypeScript for ui-panel** - ui-panel.ts with ES modules, type-safe implementation
-11. **generateCurl from utils.ts** - Shared between preload.js and ui-panel.ts
-12. **CSS extraction** - ui-panel.css and index.css separated from HTML
-13. **RESPONSE_WITHOUT_BODY Set** - Clean handling of 204/304 status codes
-14. **Version from package.json** - cli.ts reads version dynamically
-15. **URL auto-prefix** - URLs without http/https are prefixed with https://
-16. **--flat-dir flag** - Optional flat file output without directory structure
+10. **Vite build for ui_panel** - TypeScript compiled to ui_panel.js, referenced in ui_panel.html
+11. **cross_stack_utils.ts** - Shared functions (generateCurl, escapeCurl) for both backend/renderer
+12. **backend_utils.ts** - Node.js-specific utilities (jsdom, path, etc.)
+13. **underscore naming** - All files use underscore instead of kebab-case (ui_panel, not ui-panel)
+14. **RESPONSE_WITHOUT_BODY Set** - Clean handling of 204/304 status codes
+15. **Version from package.json** - cli.ts reads version dynamically
+16. **URL auto-prefix** - URLs without http/https are prefixed with https://
+17. **--flat-dir flag** - Optional flat file output without directory structure

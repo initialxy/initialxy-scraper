@@ -8,8 +8,8 @@ import {
   generateFlatFilename,
   generateSequentialFilename,
   isEligible,
-  generateCurl,
-} from './utils.ts';
+} from './backend_utils.ts';
+import { generateCurl } from './cross_stack_utils.ts';
 
 const RESPONSE_WITHOUT_BODY = new Set([204, 304]);
 

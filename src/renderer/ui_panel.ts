@@ -1,4 +1,4 @@
-import { generateCurl } from '../shared/utils.js';
+import { generateCurl } from '../shared/cross_stack_utils.js';
 import type { NetworkRequestData } from '../shared/types.js';
 
 interface Api {

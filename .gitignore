@@ -5,6 +5,9 @@ node_modules/
 dist/
 build/
 
+# Generated JS files in renderer
+src/renderer/*.js
+
 # Electron app data
 userdata/
 

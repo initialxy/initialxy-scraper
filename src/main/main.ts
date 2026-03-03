@@ -8,7 +8,7 @@ import {
   globalShortcut,
 } from 'electron';
 import { AutomationManager } from '../shared/automation.ts';
-import { extractSourceUrls, normalizeUrl } from '../shared/utils.ts';
+import { extractSourceUrls, normalizeUrl } from '../shared/backend_utils.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
 import { ProtocolHandler } from '../shared/protocol.ts';
 import fs from 'node:fs';
@@ -88,7 +88,7 @@ function createWindow(cliArgs: CLIArgs): { win: BaseWindow; protocolHandler?: Pr
   // Load the UI panel HTML
   const uiPath = path.join(
     path.dirname(new URL(import.meta.url).pathname),
-    '../renderer/ui-panel.html'
+    '../renderer/ui_panel.html'
   );
   uiView.webContents.loadFile(uiPath);
 
