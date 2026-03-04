@@ -8,6 +8,7 @@ import {
   generateFlatFilename,
   generateSequentialFilename,
   isEligible,
+  normalizeUrlWithBase,
 } from './backend_utils.ts';
 import { generateCurl } from './cross_stack_utils.ts';
 
@@ -23,15 +24,17 @@ export class ProtocolHandler {
   private flatDir?: boolean;
   private uiView?: WebContentsView;
   private webView?: WebContentsView;
-  private sourceUrls: Set<string>;
-  private completedSourceUrls: Set<string>;
+  private sourceUrls: Map<string, number>;
+  private completedSourceUrls: Map<string, number>;
   private processingUrls: Set<string>;
   private requestIdCounter: number;
+  private sequentialCounter: number;
   private activeRequests: Map<
     string,
     { id: number; url: string; method: string; headers: Record<string, string> }
   >;
   private bypassSession: ReturnType<typeof session.fromPartition>;
+  private baseUrl: string;
 
   constructor(options: ProtocolHandlerOptions) {
     this.outputDir = options.outputDir;
@@ -46,7 +49,8 @@ export class ProtocolHandler {
     this.sourceUrls = options.sourceUrls;
     this.completedSourceUrls = options.completedSourceUrls;
     this.processingUrls = new Set<string>();
-    this.requestIdCounter = 0;
+    this.sequentialCounter = 0;
+    this.baseUrl = options.webView?.webContents.getURL() || 'about:blank';
     this.activeRequests = new Map<
       string,
       { id: number; url: string; method: string; headers: Record<string, string> }
@@ -125,17 +129,15 @@ export class ProtocolHandler {
 
       const buffer = Buffer.from(await response.arrayBuffer());
 
+      // Normalize URL for consistent matching
+      const normalizedUrl = normalizeUrlWithBase(this.baseUrl, url);
+
       // Check if URL is eligible using single source of truth
-      const eligible = isEligible(url, this.filter, this.selector, this.sourceUrls);
+      const eligible = isEligible(normalizedUrl, this.filter, this.selector, this.sourceUrls);
 
       // Save file only if outputDir is set and URL is eligible
       if (this.outputDir && eligible) {
-        const filename =
-          this.renameSequence && this.selector
-            ? generateSequentialFilename(url, this.sourceUrls.size, this.renameSequence)
-            : this.flatDir
-              ? generateFlatFilename(url)
-              : generateFilename(url);
+        const filename = this.generateFilenameForUrl(normalizedUrl);
         const filepath = path.join(this.outputDir, filename);
         const dirpath = path.dirname(filepath);
         if (!fs.existsSync(dirpath)) {
@@ -167,7 +169,7 @@ export class ProtocolHandler {
 
       // Track completed source URLs
       if (this.selector && this.sourceUrls.has(url)) {
-        this.completedSourceUrls.add(url);
+        this.completedSourceUrls.set(url, this.sourceUrls.get(url)!);
       }
 
       this.activeRequests.delete(url);
@@ -187,6 +189,20 @@ export class ProtocolHandler {
     } finally {
       this.processingUrls.delete(url);
     }
+  }
+
+  private generateFilenameForUrl(url: string): string {
+    if (this.renameSequence) {
+      // If --selector is given, use the index from sourceUrls Map to preserve DOM order
+      if (this.selector && this.sourceUrls.has(url)) {
+        const index = this.sourceUrls.get(url)! + 1; // +1 to make it 1-based
+        return generateSequentialFilename(url, index, this.renameSequence);
+      }
+      // Otherwise, use an incremental counter
+      this.sequentialCounter++;
+      return generateSequentialFilename(url, this.sequentialCounter, this.renameSequence);
+    }
+    return this.flatDir ? generateFlatFilename(url) : generateFilename(url);
   }
 
   private sendNetworkEvent(
@@ -231,11 +247,11 @@ export class ProtocolHandler {
     return this.activeRequests;
   }
 
-  getSourceUrls(): Set<string> {
+  getSourceUrls(): Map<string, number> {
     return this.sourceUrls;
   }
 
-  getCompletedSourceUrls(): Set<string> {
+  getCompletedSourceUrls(): Map<string, number> {
     return this.completedSourceUrls;
   }
 }

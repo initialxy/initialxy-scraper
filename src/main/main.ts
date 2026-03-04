@@ -14,7 +14,6 @@ import { ProtocolHandler } from '../shared/protocol.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CLIArgs } from '../shared/types.ts';
-import type { WebContents } from 'electron';
 
 let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
@@ -144,19 +143,15 @@ function createWindow(cliArgs: CLIArgs): {
 
   // Handle automation commands from UI panel
   ipcMain.handle('apply-selector', async () => {
-    if (!webView?.webContents) return [];
-    const urls = await extractSourceUrls(webView!.webContents, cliArgs.selector!);
-    // Normalize URLs
-    const normalizedUrls = urls.map((url: string) =>
-      normalizeUrl(webView!.webContents.getURL(), url)
-    );
-    // Add to source URLs set
-    normalizedUrls.forEach((url: string) => {
-      if ((webView!.webContents as WebContents & { __sourceUrls?: Set<string> }).__sourceUrls) {
-        (webView!.webContents as WebContents & { __sourceUrls?: Set<string> }).__sourceUrls.add(
-          url
-        );
-      }
+    if (!webView?.webContents || !cliArgs.selector) return [];
+    const urls = await extractSourceUrls(webView!.webContents, cliArgs.selector);
+    // Normalize URLs and store with their index to preserve DOM order
+    const normalizedUrls: string[] = [];
+    urls.forEach((url: string, index: number) => {
+      const normalizedUrl = normalizeUrl(webView!.webContents.getURL(), url);
+      normalizedUrls.push(normalizedUrl);
+      // Store in sourceUrls Map with index
+      sourceUrls.set(normalizedUrl, index);
     });
     return normalizedUrls;
   });
@@ -195,8 +190,8 @@ function createWindow(cliArgs: CLIArgs): {
 
   // Always create ProtocolHandler for network monitoring
   // File saving only happens when outputDir is set
-  const sourceUrls = new Set<string>();
-  const completedSourceUrls = new Set<string>();
+  const sourceUrls = new Map<string, number>();
+  const completedSourceUrls = new Map<string, number>();
 
   const protocolHandler = new ProtocolHandler({
     outputDir: cliArgs.outputDir,

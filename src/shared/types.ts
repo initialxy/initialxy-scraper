@@ -39,8 +39,8 @@ export interface ProtocolHandlerOptions {
   flatDir?: boolean;
   uiView?: WebContentsView | null | undefined;
   webView?: WebContentsView | null | undefined;
-  sourceUrls: Set<string>;
-  completedSourceUrls: Set<string>;
+  sourceUrls: Map<string, number>;
+  completedSourceUrls: Map<string, number>;
 }
 
 export interface SourceUrl {

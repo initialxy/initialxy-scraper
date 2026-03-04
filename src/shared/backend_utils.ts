@@ -71,7 +71,8 @@ export function generateSequentialFilename(
     const baseName = path.basename(pathname);
     const ext = path.extname(baseName) || '.html';
 
-    const formattedNum = counter.toString().padStart(parseInt(renameSequence, 10), '0');
+    const width = parseInt(renameSequence, 10);
+    const formattedNum = counter.toString().padStart(width, '0');
     return `${formattedNum}${ext}`;
   } catch {
     return `response_${Date.now()}.dat`;
@@ -137,35 +138,26 @@ export async function extractSourceUrls(
 }
 
 /**
+ * Normalize URL using base URL
+ */
+export function normalizeUrlWithBase(base: string, url: string): string {
+  try {
+    return new URL(url, base).href;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Check if URL is eligible for capture based on CLI args
  */
 export function isEligible(
   url: string,
   filter?: RegExp,
   selector?: string,
-  sourceUrls?: Set<string>
+  sourceUrls?: Map<string, number>
 ): boolean {
-  // If no filters, all URLs are eligible
-  if (!filter && !selector) {
-    return true;
-  }
-
-  // If only filter specified
-  if (filter && !selector) {
-    return filter.test(url);
-  }
-
-  // If only selector specified
-  if (!filter && selector) {
-    return sourceUrls?.has(url) ?? false;
-  }
-
-  // If both filter and selector specified (AND logic)
-  if (filter && selector) {
-    return (filter.test(url) && sourceUrls?.has(url)) ?? false;
-  }
-
-  return false;
+  return (!filter || filter.test(url)) && (!selector || sourceUrls?.has(url));
 }
 
 /**
