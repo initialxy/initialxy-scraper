@@ -1,58 +1,23 @@
 import path from 'node:path';
 
-// Track filename collisions
-const filenameCounter = new Map<string, number>();
-
 /**
  * Generate filename from URL
  */
-export function generateFilename(url: string, counter?: number): string {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname || '/index';
-    const baseName = pathname.split('/').filter(Boolean).join('/') || 'index';
-    const ext = path.extname(baseName) || '.html';
-    const nameWithoutExt = baseName.replace(ext, '');
+export function normalizeFilename(url: string): string {
+  const urlObj = new URL(url);
+  const pathname = urlObj.pathname || '/index';
+  const cleanedPathName = pathname.split('/').filter(Boolean).join('/') || 'index';
+  const ext = path.extname(cleanedPathName) || '.html';
+  const nameWithoutExt = cleanedPathName.replace(ext, '');
 
-    // Handle collisions by adding counter
-    const currentCount = counter ?? (filenameCounter.get(nameWithoutExt) || 0);
-    if (counter === undefined) {
-      filenameCounter.set(nameWithoutExt, currentCount + 1);
-    }
-
-    if (currentCount === 0) {
-      return `${nameWithoutExt}${ext}`;
-    }
-    return `${nameWithoutExt}_${currentCount}${ext}`;
-  } catch {
-    return `response_${Date.now()}.dat`;
-  }
+  return `${nameWithoutExt}${ext}`;
 }
 
 /**
  * Generate flat filename from URL (no directory structure)
  */
-export function generateFlatFilename(url: string, counter?: number): string {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname || '/index';
-    const baseName = path.basename(pathname) || 'index';
-    const ext = path.extname(baseName) || '.html';
-    const nameWithoutExt = baseName.replace(ext, '');
-
-    // Handle collisions by adding counter
-    const currentCount = counter ?? (filenameCounter.get(nameWithoutExt) || 0);
-    if (counter === undefined) {
-      filenameCounter.set(nameWithoutExt, currentCount + 1);
-    }
-
-    if (currentCount === 0) {
-      return `${nameWithoutExt}${ext}`;
-    }
-    return `${nameWithoutExt}_${currentCount}${ext}`;
-  } catch {
-    return `response_${Date.now()}.dat`;
-  }
+export function normalizeFlatFilename(url: string): string {
+  return path.basename(normalizeFilename(url));
 }
 
 /**
@@ -63,18 +28,14 @@ export function generateSequentialFilename(
   counter: number,
   renameSequence: string
 ): string {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname || '/index';
-    const baseName = path.basename(pathname);
-    const ext = path.extname(baseName) || '.html';
+  const urlObj = new URL(url);
+  const pathname = urlObj.pathname || '/index';
+  const baseName = path.basename(pathname);
+  const ext = path.extname(baseName) || '.html';
 
-    const width = parseInt(renameSequence, 10);
-    const formattedNum = counter.toString().padStart(width, '0');
-    return `${formattedNum}${ext}`;
-  } catch {
-    return `response_${Date.now()}.dat`;
-  }
+  const width = parseInt(renameSequence, 10);
+  const formattedNum = counter.toString().padStart(width, '0');
+  return `${formattedNum}${ext}`;
 }
 
 /**

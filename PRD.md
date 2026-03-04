@@ -104,7 +104,7 @@ Command-line arguments for automated web scraping. Browser remains visible (not 
 | `--wait`            | `-w`      | number | Wait time in seconds after page load before starting idle timer (if --close-on-idle is set) |
 | `--scroll`          | `-r`      | number | Pixels to scroll down every second                                                          |
 | `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
-| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                                          |
+| `--rename-sequence` | -         | string | Number of digits for padding.                                                               |
 | `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
 
 #### Eligibility Logic
@@ -122,7 +122,6 @@ When `--selector` specified, extract URLs using priority:
 
 1. `src` attribute
 2. `data-src` attribute
-3. `srcset` attribute (parse ALL URLs, preserve order)
 
 **URL Normalization**: Convert to absolute paths before matching.
 
@@ -299,7 +298,7 @@ Main Process (main.ts) - Central Coordinator
 - Receives CLI args: filter, selector, outputDir, outputCurl, renameSequence, flatDir
 - Maintains unprocessedResponses buffer when --selector is active
 - Receives page source via updatePageSource(pageSource) from main.ts
-- Extracts source URLs from DOM using selector (src, data-src, srcset priority)
+- Extracts source URLs from DOM using selector (src, data-src priority)
 - Normalizes URLs to absolute paths
 - Filters responses based on eligibility logic (filter + selector AND logic)
 - Outputs to file (output-dir) or console (output-curl)
@@ -389,7 +388,7 @@ export class ProtocolHandler {
 
 - Filter responses based on `--filter` regex and `--selector` DOM matching
 - Buffer responses when `--selector` is active (wait for page source)
-- Extract source URLs from HTML using jsdom (src, data-src, srcset priority)
+- Extract source URLs from HTML using jsdom (src, data-src priority)
 - Normalize URLs to absolute paths
 - Output to file (output-dir) or console (output-curl)
 - Callback to main.ts: `onOutput(url)` when response is output (resets idle timer)
@@ -405,7 +404,6 @@ export class ProtocolHandler {
 
 1. `src` attribute
 2. `data-src` attribute
-3. `srcset` attribute (parse ALL URLs, preserve order)
 
 **Response Processing Flow**:
 
@@ -581,8 +579,7 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] OutputManager buffers responses when --selector is active
 - [ ] OutputManager processes buffered responses after updatePageSource()
 - [ ] Filter and selector eligibility logic works
-- [ ] Source extraction uses correct priority (src, data-src, srcset)
-- [ ] srcset parsing extracts ALL URLs in order
+- [ ] Source extraction uses correct priority (src, data-src)
 - [ ] URL normalization converts to absolute paths
 - [ ] Selector re-applies after each scroll (via setTimeout in main.ts)
 - [ ] Scroll stops at page bottom (auto-detects and cancels interval)

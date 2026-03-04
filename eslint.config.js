@@ -29,8 +29,6 @@ export default [
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/strict-boolean-expressions': 'off',
-      'no-console': ['warn', { allow: ['debug', 'error'] }],
       'no-undef': 'off',
     },
   },

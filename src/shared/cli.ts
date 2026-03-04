@@ -23,7 +23,10 @@ export function parseCLIArgs(): CLIArgs {
     )
     .option('-r, --scroll <pixels>', 'Scroll down by pixels (0 = scroll to bottom)')
     .option('-c, --close-on-idle <seconds>', 'Close window after N seconds of network idle')
-    .option('--rename-sequence <pattern>', 'Rename pattern for scraped files')
+    .option(
+      '--rename-sequence <digits>',
+      'Rename files to sequential numbers with specified zero-padding (e.g., 4 for 0001, 0002, etc.)'
+    )
     .option('-v, --verbose', 'Enable verbose logging for network traffic')
     .option('--output-curl', 'Output curl commands for matching URLs to stdout')
     .option('--flat-dir', 'Dump files flat in output-dir without subdirectories');

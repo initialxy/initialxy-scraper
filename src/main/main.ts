@@ -1,12 +1,4 @@
-import {
-  app,
-  BaseWindow,
-  WebContentsView,
-  nativeTheme,
-  ipcMain,
-  clipboard,
-  globalShortcut,
-} from 'electron';
+import { app, BaseWindow, WebContentsView, nativeTheme, ipcMain, clipboard } from 'electron';
 import { AutomationManager } from '../shared/automation.ts';
 import { OutputManager } from '../shared/output_manager.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
@@ -135,18 +127,6 @@ function createWindow(cliArgs: CLIArgs): {
   ipcMain.handle('get-page-source', async (_event) => {
     if (!webView) return '';
     return await webView.webContents.executeJavaScript('document.documentElement.outerHTML');
-  });
-
-  // Keyboard navigation - Alt+Left/Right for back/forward
-  globalShortcut.register('Alt+Left', () => {
-    if (webView?.webContents.navigationHistory.canGoBack()) {
-      webView.webContents.navigationHistory.goBack();
-    }
-  });
-  globalShortcut.register('Alt+Right', () => {
-    if (webView?.webContents.navigationHistory.canGoForward()) {
-      webView.webContents.navigationHistory.goForward();
-    }
   });
 
   // Create OutputManager first

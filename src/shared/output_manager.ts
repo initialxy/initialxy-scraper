@@ -1,7 +1,7 @@
 import type { OutputManagerOptions } from './types.ts';
 import {
-  generateFilename,
-  generateFlatFilename,
+  normalizeFilename,
+  normalizeFlatFilename,
   generateSequentialFilename,
   normalizeUrlWithBase,
 } from './backend_utils.ts';
@@ -66,66 +66,64 @@ export class OutputManager {
       return;
     }
 
-    this.processResponse(responseData);
+    this.processResponse(responseData, new Map<string, number>());
   }
 
   updatePageSource(pageSource: string): void {
+    if (this.unprocessedResponses.length === 0) {
+      return;
+    }
+
     const sourceUrls = this.extractSourceUrlsFromSource(pageSource);
 
-    for (const responseData of this.unprocessedResponses) {
-      const normalizedUrl = normalizeUrlWithBase(this.baseUrl, responseData.request.url);
-      if (this.isEligible(normalizedUrl, sourceUrls)) {
-        this.processResponse(responseData);
-      }
-    }
+    this.unprocessedResponses.forEach((responseData) => {
+      this.processResponse(responseData, sourceUrls);
+    });
 
     this.unprocessedResponses = [];
   }
 
-  private extractSourceUrlsFromSource(pageSource: string): Set<string> {
+  private extractSourceUrlsFromSource(pageSource: string): Map<string, number> {
+    if (!this.selector) {
+      return new Map<string, number>();
+    }
+
     const dom = new JSDOM(pageSource);
     const document = dom.window.document;
-    const elements = this.selector
-      ? document.querySelectorAll(this.selector)
-      : document.querySelectorAll('*');
-    const sourceUrls = new Set<string>();
+    const elements = document.querySelectorAll(this.selector);
+    const sourceUrls = new Map<string, number>();
 
-    elements.forEach((el) => {
+    elements.forEach((el, i) => {
       const element = el as HTMLElement & {
         src?: string;
         dataset?: { src?: string };
-        srcset?: string;
       };
 
       if (element.src) {
         const normalizedUrl = normalizeUrlWithBase(this.baseUrl, element.src);
-        sourceUrls.add(normalizedUrl);
+        sourceUrls.set(normalizedUrl, i);
       } else if (element.dataset?.src) {
         const normalizedUrl = normalizeUrlWithBase(this.baseUrl, element.dataset.src);
-        sourceUrls.add(normalizedUrl);
-      } else if (element.srcset) {
-        element.srcset.split(',').forEach((src) => {
-          const parts = src.trim().split(/ /);
-          if (parts[0]) {
-            const normalizedUrl = normalizeUrlWithBase(this.baseUrl, parts[0]);
-            sourceUrls.add(normalizedUrl);
-          }
-        });
+        sourceUrls.set(normalizedUrl, i);
       }
     });
 
     return sourceUrls;
   }
 
-  private isEligible(url: string, sourceUrls: Set<string>): boolean {
+  private isEligible(url: string, sourceUrls: Map<string, number>): boolean {
     const filterMatch = !this.filter || this.filter.test(url);
     const selectorMatch = !this.selector || sourceUrls.has(url);
     return filterMatch && selectorMatch;
   }
 
-  private processResponse(responseData: ResponseData): void {
+  private processResponse(responseData: ResponseData, sourceUrls: Map<string, number>): void {
+    const normalizedUrl = normalizeUrlWithBase(this.baseUrl, responseData.request.url);
+    if (!this.isEligible(normalizedUrl, sourceUrls)) {
+      return;
+    }
+
     const { request, response } = responseData;
-    const normalizedUrl = normalizeUrlWithBase(this.baseUrl, request.url);
 
     if (this.outputCurl) {
       const command = this.generateOutputCommand(request);
@@ -135,7 +133,7 @@ export class OutputManager {
     }
 
     if (this.outputDir) {
-      this.writeToFile(response, normalizedUrl);
+      this.writeToFile(response, normalizedUrl, sourceUrls);
     }
 
     this.onOutput(request.url);
@@ -158,14 +156,18 @@ export class OutputManager {
       body: Buffer;
       headers: Record<string, string>;
     },
-    normalizedUrl: string
+    normalizedUrl: string,
+    sourceUrls: Map<string, number>
   ): void {
     try {
       if (RESPONSE_WITHOUT_BODY.has(response.statusCode)) {
         return;
       }
 
-      const filename = this.generateFilenameForUrl(normalizedUrl);
+      const sequence = sourceUrls.get(normalizedUrl) ?? this.sequentialCounter;
+      this.sequentialCounter++;
+
+      const filename = this.generateFilenameForUrl(normalizedUrl, sequence);
       const filepath = path.join(this.outputDir!, filename);
       const dirpath = path.dirname(filepath);
 
@@ -180,11 +182,10 @@ export class OutputManager {
     }
   }
 
-  private generateFilenameForUrl(url: string): string {
+  private generateFilenameForUrl(url: string, sequence: number): string {
     if (this.renameSequence) {
-      this.sequentialCounter++;
-      return generateSequentialFilename(url, this.sequentialCounter, this.renameSequence);
+      return generateSequentialFilename(url, sequence, this.renameSequence);
     }
-    return this.flatDir ? generateFlatFilename(url) : generateFilename(url);
+    return this.flatDir ? normalizeFlatFilename(url) : normalizeFilename(url);
   }
 }
