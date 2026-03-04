@@ -4,7 +4,7 @@
 
 initialxy-scraper is a minimal Electron-based web browser designed for network monitoring and automated web scraping. Unlike traditional browsers, it strips away all unnecessary features (tabs, settings, bookmarks, extensions) to provide a focused tool for developers and automation scripts.
 
-**Core Philosophy**: Maximum functionality with minimum surface area.
+**Core Philosophy**: Advanced web scraping features while evading detection.
 
 ## Architecture
 

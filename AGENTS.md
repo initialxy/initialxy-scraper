@@ -1,6 +1,6 @@
 # initialxy-scraper - Technical Context
 
-**Version**: 2.2.0  
+**Version**: 1.0.0
 **Electron**: 40.6.1 | **Node**: 24.x+ | **TypeScript**: 5.9.3 | **Vite**: 7.3.1
 
 ---

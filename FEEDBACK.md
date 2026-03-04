@@ -1,5 +1,0 @@
-in .gitignore, we ignored all .js files under renderer, but this also ignored preload.js. Let's fix this by creating a subdirectory, say, `ui` and move all the ui_panel.* stuff under there then update .gitignore to only ignore .js files under src/renderer/ui
-
-I don't like how npm start will start vite dev server which will hang the process when Electron app is closed. We can have npm run dev to start vite dev server, but npm start should just build and launch electron without vite dev server.
-
-I noticed that some of the initial page load resources are NOT show in Network Monitor such as the initial HTML. This seems to indicate that we connected Protocol handler too late after page already started loading. How about we load about:blank initially and make sure we connect to Protocol handler, only then we start loading the given URL.
