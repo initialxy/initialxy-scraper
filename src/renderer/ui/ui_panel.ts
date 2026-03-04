@@ -1,16 +1,11 @@
 import { generateCurl, generateFFmpegCommand, isM3u8 } from '../../shared/cross_stack_utils.ts';
-import type { NetworkRequestData } from '../../shared/types.ts';
+import type { NetworkRequest } from '../../shared/types.ts';
 
 interface Api {
-  onNetworkRequestStart: (callback: (data: NetworkRequestData) => void) => void;
-  onNetworkRequestComplete: (callback: (data: NetworkRequestData) => void) => void;
+  onNetworkRequestStart: (callback: (data: NetworkRequest) => void) => void;
+  onNetworkRequestComplete: (callback: (data: NetworkRequest) => void) => void;
   copyToClipboard: (text: string) => Promise<void>;
   getPageSource: () => Promise<string>;
-  applySelector: () => Promise<void>;
-  scrollPage: () => Promise<void>;
-  checkSourceCompleted: () => Promise<boolean>;
-  markSourceCompleted: (url: string) => Promise<void>;
-  getCompletedStatus: () => Promise<{ allCompleted: boolean; count: number }>;
 }
 
 declare global {
@@ -24,7 +19,7 @@ class NetworkMonitor {
   private filterInput: HTMLInputElement;
   private copySourceBtn: HTMLButtonElement;
   private toast: HTMLElement;
-  private requests: Map<number, { row: HTMLElement; data: NetworkRequestData }>;
+  private requests: Map<number, { row: HTMLElement; data: NetworkRequest }>;
 
   constructor() {
     this.requestList = document.querySelector('.request-list')!;
@@ -61,7 +56,7 @@ class NetworkMonitor {
 
   private setupIPCListeners(): void {
     // Listen for network request start
-    window.api.onNetworkRequestStart((data: NetworkRequestData) => {
+    window.api.onNetworkRequestStart((data: NetworkRequest) => {
       const row = document.createElement('div');
       row.className = 'request-row';
       row.dataset.id = data.id.toString();
@@ -106,7 +101,7 @@ class NetworkMonitor {
     });
 
     // Listen for network request complete
-    window.api.onNetworkRequestComplete((data: NetworkRequestData) => {
+    window.api.onNetworkRequestComplete((data: NetworkRequest) => {
       const req = this.requests.get(data.id);
       if (req) {
         req.row.classList.add('complete');

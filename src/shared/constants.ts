@@ -1,5 +1,8 @@
-// IPC Channel constants
+// General purpose constants
+export const MS_IN_S = 1000;
+export const MILD_DELAY_MS = 100;
 
+// IPC Channel constants
 export const IPC_CHANNELS = {
   // Network monitoring
   networkRequestStart: 'network-request-start',
@@ -8,12 +11,9 @@ export const IPC_CHANNELS = {
   copyToClipboard: 'copy-to-clipboard',
   // Page source
   getPageSource: 'get-page-source',
-  // Automation
-  applySelector: 'apply-selector',
-  scrollPage: 'scroll-page',
-  checkSourceCompleted: 'check-source-completed',
-  markSourceCompleted: 'mark-source-completed',
-  getCompletedStatus: 'get-completed-status',
 } as const;
 
 export type IPCChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
+
+// HTTP responses without body
+export const RESPONSE_WITHOUT_BODY = new Set([204, 304]);

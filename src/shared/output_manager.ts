@@ -6,11 +6,10 @@ import {
   normalizeUrlWithBase,
 } from './backend_utils.ts';
 import { generateCurl, generateFFmpegCommand, isM3u8 } from './cross_stack_utils.ts';
+import { RESPONSE_WITHOUT_BODY } from './constants.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
-
-const RESPONSE_WITHOUT_BODY = new Set([204, 304]);
 
 interface ResponseData {
   request: {

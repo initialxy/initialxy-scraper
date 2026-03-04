@@ -8,9 +8,10 @@ import {
   globalShortcut,
 } from 'electron';
 import { AutomationManager } from '../shared/automation.ts';
+import { OutputManager } from '../shared/output_manager.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
 import { ProtocolHandler } from '../shared/protocol.ts';
-import { OutputManager } from '../shared/output_manager.ts';
+import { MILD_DELAY_MS } from '../shared/constants.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CLIArgs } from '../shared/types.ts';
@@ -148,43 +149,6 @@ function createWindow(cliArgs: CLIArgs): {
     }
   });
 
-  // Handle automation commands from UI panel
-  ipcMain.handle('apply-selector', async () => {
-    return [];
-  });
-
-  ipcMain.handle('scroll-page', async () => {
-    if (!webView) return false;
-    try {
-      const scrolled = await webView.webContents.executeJavaScript(`
-        (function() {
-          const scrolled = window.scrollBy(0, ${cliArgs.scroll || 1});
-          return document.documentElement.scrollHeight > (window.pageYOffset + window.innerHeight + 1);
-        })()
-      `);
-      return !scrolled; // Return true if at bottom
-    } catch {
-      return false;
-    }
-  });
-
-  ipcMain.handle('check-source-completed', () => {
-    // This would check actual tracking
-    return true;
-  });
-
-  ipcMain.handle('mark-source-completed', (_event, _url) => {
-    // This would mark actual completion
-  });
-
-  ipcMain.handle('get-completed-status', () => {
-    return {
-      sourceCount: 0,
-      completedCount: 0,
-      allCompleted: true,
-    };
-  });
-
   // Create OutputManager first
   outputManager = new OutputManager({
     outputDir: cliArgs.outputDir,
@@ -247,19 +211,27 @@ app.whenReady().then(async () => {
   if (returnedCliArgs?.url && webView?.webContents) {
     setTimeout(() => {
       webView.webContents.loadURL(returnedCliArgs.url);
-    }, 100);
+    }, MILD_DELAY_MS);
   }
 
   // Initialize automation manager after window is created
   if (webView?.webContents) {
     automationManager = new AutomationManager({
       waitS: cliArgs.wait || 0,
-      scrollIntervalS: 1,
+      scrollIntervalS: cliArgs.scroll ? 1 : 0,
       closeOnIdleTimeS: cliArgs.closeOnIdle || null,
       onScrollRequested: async () => {
-        await webView?.webContents.executeJavaScript(
-          `window.scrollBy(0, ${cliArgs.scroll || 100});`
+        const shouldContinue = await webView?.webContents.executeJavaScript(
+          `(() => {
+            // Check if we're already at the bottom before scrolling
+            const hasReachedBottom = window.scrollY >= (document.body.scrollHeight - window.innerHeight);
+            if (!hasReachedBottom) {
+                const scrolled = window.scrollBy(0, ${cliArgs.scroll});
+            }
+            return !hasReachedBottom;
+          })();`
         );
+        return shouldContinue ?? false;
       },
       onUpdateRequested: async () => {
         await updatePageSource();

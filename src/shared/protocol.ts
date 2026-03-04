@@ -1,7 +1,6 @@
 import { protocol, session } from 'electron';
 import type { ProtocolCallbacks } from './types.ts';
-
-const RESPONSE_WITHOUT_BODY = new Set([204, 304]);
+import { RESPONSE_WITHOUT_BODY } from './constants.ts';
 
 export class ProtocolHandler {
   private baseUrl: string;

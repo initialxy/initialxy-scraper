@@ -34,7 +34,7 @@ BaseWindow (1200x800)
 - Window creation, lifecycle management
 - WebContents access (ONLY module with direct access)
 - IPC handlers for renderer communication
-- Exports: `updatePageSource()`, `scrollAndUpdate()`
+- Exports: `updatePageSource()`
 
 ### ProtocolHandler (`src/shared/protocol.ts`)
 
@@ -53,10 +53,11 @@ BaseWindow (1200x800)
 
 ### AutomationManager (`src/shared/automation.ts`)
 
-- `--wait`: delays page source update
-- `--scroll`: scrolls every second after wait
-- `--close-on-idle`: closes after idle period
-- `onOutputEvent()`: resets idle timer
+- **Single responsibility**: Timer abstractions only
+- **Constructor params**: `waitS`, `scrollIntervalS`, `closeOnIdleTimeS`, `onScrollRequested`, `onUpdateRequested`, `onCloseRequested`
+- **Methods**: `start()` - initializes all timers, `onOutputEvent()` - resets idle timer
+- **NO access** to `webView` or `cliArgs` - delegates via callbacks
+- **onScrollRequested**: Returns `Promise<boolean>` - `true` to continue scrolling, `false` to stop (e.g., at page bottom)
 
 ---
 
@@ -199,4 +200,32 @@ export async function updatePageSource(): Promise<void> {
   const source = await webView.webContents.executeJavaScript('document.documentElement.outerHTML');
   outputManager.updatePageSource(source);
 }
+```
+
+**AutomationManager instantiation**:
+
+```typescript
+const automationManager = new AutomationManager({
+  waitS: cliArgs.wait || 0,
+  scrollIntervalS: 1,
+  closeOnIdleTimeS: cliArgs.closeOnIdle || null,
+  onScrollRequested: async () => {
+    const shouldContinue = await webView?.webContents.executeJavaScript(
+      `(() => {
+        const scrollAmount = ${cliArgs.scroll || 100};
+        const scrolled = window.scrollBy(0, scrollAmount);
+        const scrolledDown = window.scrollY >= (document.body.scrollHeight - window.innerHeight);
+        return !scrolledDown;
+      })();`
+    );
+    return shouldContinue ?? false;
+  },
+  onUpdateRequested: async () => {
+    await updatePageSource();
+  },
+  onCloseRequested: () => {
+    process.exit(0);
+  },
+});
+automationManager.start();
 ```

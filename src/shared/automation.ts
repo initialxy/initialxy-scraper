@@ -1,11 +1,10 @@
-const MS_IN_S = 1000;
-const POST_SCROLL_WAIT_MS = 100;
+import { MS_IN_S, MILD_DELAY_MS } from './constants.ts';
 
 export class AutomationManager {
   private waitS: number;
   private scrollIntervalS: number;
   private closeOnIdleTimeS: number | null;
-  private onScrollRequested: () => Promise<void>;
+  private onScrollRequested: () => Promise<boolean>;
   private onUpdateRequested: () => Promise<void>;
   private onCloseRequested: () => void;
 
@@ -16,7 +15,7 @@ export class AutomationManager {
     waitS: number;
     scrollIntervalS: number;
     closeOnIdleTimeS: number | null;
-    onScrollRequested: () => Promise<void>;
+    onScrollRequested: () => Promise<boolean>;
     onUpdateRequested: () => Promise<void>;
     onCloseRequested: () => void;
   }) {
@@ -44,12 +43,23 @@ export class AutomationManager {
   }
 
   private startScroll(): void {
-    setInterval(async () => {
-      await this.onScrollRequested();
+    let scrollInterval: NodeJS.Timeout | null = null;
+
+    const scrollLoop = async () => {
+      const shouldContinue = await this.onScrollRequested();
+      if (!shouldContinue) {
+        clearInterval(scrollInterval);
+        return;
+      }
+
       setTimeout(async () => {
         await this.onUpdateRequested();
-      }, POST_SCROLL_WAIT_MS);
-    }, this.scrollIntervalS * MS_IN_S);
+      }, MILD_DELAY_MS);
+    };
+
+    if (this.scrollIntervalS > 0) {
+      scrollInterval = setInterval(scrollLoop, this.scrollIntervalS * MS_IN_S);
+    }
   }
 
   private startIdleTimer(): void {

@@ -22,12 +22,6 @@ export interface NetworkRequest {
   statusCode?: number;
 }
 
-export interface CompletedStatus {
-  sourceCount: number;
-  completedCount: number;
-  allCompleted: boolean;
-}
-
 export interface ProtocolCallbacks {
   onRequestStarted: (request: {
     id: number;
@@ -58,17 +52,4 @@ export interface OutputManagerOptions {
   outputCurl?: boolean;
   flatDir?: boolean;
   onOutput: (url: string) => void;
-}
-
-export interface SourceUrl {
-  url: string;
-  timestamp: number;
-}
-
-export interface NetworkRequestData {
-  id: number;
-  url: string;
-  method: string;
-  headers: Record<string, string>;
-  statusCode?: number;
 }

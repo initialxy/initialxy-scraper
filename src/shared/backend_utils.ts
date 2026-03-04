@@ -1,6 +1,4 @@
 import path from 'node:path';
-import type { WebContents } from 'electron';
-import { JSDOM } from 'jsdom';
 
 // Track filename collisions
 const filenameCounter = new Map<string, number>();
@@ -80,64 +78,6 @@ export function generateSequentialFilename(
 }
 
 /**
- * Normalize URL to absolute path
- */
-export function normalizeUrl(base: string, relative: string): string {
-  try {
-    return new URL(relative, base).href;
-  } catch {
-    return relative;
-  }
-}
-
-/**
- * Extract source URLs from DOM using selector
- */
-export async function extractSourceUrls(
-  webContents: WebContents,
-  selector: string
-): Promise<string[]> {
-  try {
-    const pageSource = await webContents.executeJavaScript('document.documentElement.outerHTML');
-
-    const dom = new JSDOM(pageSource);
-    const document = dom.window.document;
-    const elements = document.querySelectorAll(selector);
-    const results: string[] = [];
-
-    elements.forEach((el) => {
-      const element = el as HTMLElement & {
-        src?: string;
-        dataset?: { src?: string };
-        srcset?: string;
-      };
-
-      // Priority 1: src attribute
-      if (element.src) {
-        results.push(element.src);
-      }
-      // Priority 2: data-src attribute
-      else if (element.dataset?.src) {
-        results.push(element.dataset.src);
-      }
-      // Priority 3: srcset attribute (parse all URLs)
-      else if (element.srcset) {
-        const srcsetUrls = element.srcset.split(',').map((src) => {
-          const parts = src.trim().split(/ /);
-          return parts[0];
-        });
-        results.push(...srcsetUrls);
-      }
-    });
-
-    return results;
-  } catch (error) {
-    console.error('[Utils] Error extracting source URLs:', error);
-    return [];
-  }
-}
-
-/**
  * Normalize URL using base URL
  */
 export function normalizeUrlWithBase(base: string, url: string): string {
@@ -146,45 +86,4 @@ export function normalizeUrlWithBase(base: string, url: string): string {
   } catch {
     return url;
   }
-}
-
-/**
- * Check if URL is eligible for capture based on CLI args
- */
-export function isEligible(
-  url: string,
-  filter?: RegExp,
-  selector?: string,
-  sourceUrls?: Map<string, number>
-): boolean {
-  return (!filter || filter.test(url)) && (!selector || sourceUrls?.has(url));
-}
-
-/**
- * Escape text for HTML display
- */
-export function escapeHtml(text: string): string {
-  // Simple HTML escape for Node.js environment
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Wait for a specified number of seconds
- */
-export function wait(seconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-}
-
-/**
- * Parse delay value from CLI argument
- */
-export function parseDelay(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = parseFloat(value);
-  return isNaN(parsed) ? undefined : parsed;
 }
