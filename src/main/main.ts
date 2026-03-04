@@ -8,15 +8,17 @@ import {
   globalShortcut,
 } from 'electron';
 import { AutomationManager } from '../shared/automation.ts';
-import { extractSourceUrls, normalizeUrl } from '../shared/backend_utils.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
 import { ProtocolHandler } from '../shared/protocol.ts';
+import { OutputManager } from '../shared/output_manager.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CLIArgs } from '../shared/types.ts';
 
 let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
+let outputManager: OutputManager | null = null;
+let automationManager: AutomationManager | null = null;
 
 function createWindow(cliArgs: CLIArgs): {
   win: BaseWindow;
@@ -45,10 +47,10 @@ function createWindow(cliArgs: CLIArgs): {
   // Load about:blank initially - will navigate to target URL after protocol handler is registered
   webView!.webContents.loadURL('about:blank');
 
-  // Inject dark scrollbar CSS for web view
-  webView.webContents.on('did-finish-load', () => {
-    webView?.webContents.executeJavaScript(`
-      (function() {
+  // Inject dark scrollbar CSS for web view and handle page load
+  webView.webContents.on('did-finish-load', async () => {
+    webView?.webContents.executeJavaScript(
+      `(function() {
         const style = document.createElement('style');
         style.textContent = \`
           ::-webkit-scrollbar {
@@ -67,8 +69,13 @@ function createWindow(cliArgs: CLIArgs): {
           }
         \`;
         document.head.appendChild(style);
-      })();
-    `);
+      })();`
+    );
+
+    // Update page source if selector is specified and wait is not set
+    if (cliArgs.selector && !cliArgs.wait) {
+      await updatePageSource();
+    }
   });
 
   // Right panel: UI panel WebContentsView
@@ -143,17 +150,7 @@ function createWindow(cliArgs: CLIArgs): {
 
   // Handle automation commands from UI panel
   ipcMain.handle('apply-selector', async () => {
-    if (!webView?.webContents || !cliArgs.selector) return [];
-    const urls = await extractSourceUrls(webView!.webContents, cliArgs.selector);
-    // Normalize URLs and store with their index to preserve DOM order
-    const normalizedUrls: string[] = [];
-    urls.forEach((url: string, index: number) => {
-      const normalizedUrl = normalizeUrl(webView!.webContents.getURL(), url);
-      normalizedUrls.push(normalizedUrl);
-      // Store in sourceUrls Map with index
-      sourceUrls.set(normalizedUrl, index);
-    });
-    return normalizedUrls;
+    return [];
   });
 
   ipcMain.handle('scroll-page', async () => {
@@ -188,22 +185,37 @@ function createWindow(cliArgs: CLIArgs): {
     };
   });
 
-  // Always create ProtocolHandler for network monitoring
-  // File saving only happens when outputDir is set
-  const sourceUrls = new Map<string, number>();
-  const completedSourceUrls = new Map<string, number>();
-
-  const protocolHandler = new ProtocolHandler({
+  // Create OutputManager first
+  outputManager = new OutputManager({
     outputDir: cliArgs.outputDir,
     filter: cliArgs.filter,
     selector: cliArgs.selector,
     renameSequence: cliArgs.renameSequence,
-    verbose: cliArgs.verbose,
     outputCurl: cliArgs.outputCurl,
-    uiView,
-    webView,
-    sourceUrls,
-    completedSourceUrls,
+    flatDir: cliArgs.flatDir,
+    baseUrl: webView?.webContents.getURL() || 'about:blank',
+    onOutput: (_url) => {
+      // Reset idle timer when output happens
+      automationManager?.onOutputEvent();
+    },
+  });
+
+  // Create ProtocolHandler with callbacks that forward to OutputManager and UI
+  const protocolHandler = new ProtocolHandler(webView?.webContents.getURL() || 'about:blank', {
+    onRequestStarted: (request) => {
+      // Send IPC to renderer for network panel
+      uiView?.webContents.send('network-request-start', request);
+    },
+    onResponseCompleted: (request, response) => {
+      // Send IPC to renderer for network panel
+      uiView?.webContents.send('network-request-complete', {
+        id: request.id,
+        url: request.url,
+        statusCode: response.statusCode,
+      });
+      // Forward to OutputManager
+      outputManager?.responseCompleted(request, response);
+    },
   });
 
   protocolHandler.register();
@@ -240,10 +252,10 @@ app.whenReady().then(async () => {
 
   // Initialize automation manager after window is created
   if (webView?.webContents) {
-    const automation = new AutomationManager(webView, cliArgs);
-    automation.initializeWait();
-    automation.initializeScroll();
-    automation.initializeCloseOnIdle();
+    automationManager = new AutomationManager(webView, cliArgs);
+    automationManager.initializeWait();
+    automationManager.initializeScroll();
+    automationManager.initializeCloseOnIdle();
   }
 
   // Show the window
@@ -261,3 +273,38 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+/**
+ * Update page source for selector-based extraction
+ */
+export async function updatePageSource(): Promise<void> {
+  if (!webView?.webContents || !outputManager) return;
+  try {
+    const pageSource = await webView.webContents.executeJavaScript(
+      'document.documentElement.outerHTML'
+    );
+    outputManager.updatePageSource(pageSource);
+  } catch (error) {
+    console.error('[Main] Error getting page source:', error);
+  }
+}
+
+/**
+ * Scroll page and update page source if selector is active
+ */
+export async function scrollAndUpdate(): Promise<void> {
+  if (!webView?.webContents) return;
+  try {
+    const scrollAmount = automationManager?.cliArgs?.scroll || 100;
+    await webView.webContents.executeJavaScript(`
+      window.scrollBy(0, ${scrollAmount});
+    `);
+
+    // Update page source if selector is active
+    if (automationManager?.cliArgs?.selector) {
+      await updatePageSource();
+    }
+  } catch (error) {
+    console.error('[Main] Error scrolling:', error);
+  }
+}

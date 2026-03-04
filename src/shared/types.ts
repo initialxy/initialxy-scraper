@@ -1,5 +1,4 @@
 // Shared types for initialxy-scraper
-import type { WebContentsView } from 'electron';
 
 export interface CLIArgs {
   outputDir?: string;
@@ -29,18 +28,36 @@ export interface CompletedStatus {
   allCompleted: boolean;
 }
 
-export interface ProtocolHandlerOptions {
+export interface ProtocolCallbacks {
+  onRequestStarted: (request: {
+    id: number;
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+  }) => void;
+  onResponseCompleted: (
+    request: {
+      id: number;
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+    },
+    response: {
+      statusCode: number;
+      body: Buffer;
+      headers: Record<string, string>;
+    }
+  ) => void;
+}
+
+export interface OutputManagerOptions {
   outputDir?: string;
   filter?: RegExp;
   selector?: string;
   renameSequence?: string;
-  verbose?: boolean;
   outputCurl?: boolean;
   flatDir?: boolean;
-  uiView?: WebContentsView | null | undefined;
-  webView?: WebContentsView | null | undefined;
-  sourceUrls: Map<string, number>;
-  completedSourceUrls: Map<string, number>;
+  onOutput: (url: string) => void;
 }
 
 export interface SourceUrl {
