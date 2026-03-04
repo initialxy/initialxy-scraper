@@ -17,7 +17,10 @@ export function parseCLIArgs(): CLIArgs {
     .option('-o, --output-dir <dir>', 'Output directory for scraped files')
     .option('-f, --filter <regex>', 'URL filter regex for selecting responses')
     .option('-s, --selector <selector>', 'CSS selector for src attribute extraction')
-    .option('-w, --wait <seconds>', 'Wait seconds after page load before closing')
+    .option(
+      '-w, --wait <seconds>',
+      'Wait seconds after page load before closing (starts idle timer if --close-on-idle is also set)'
+    )
     .option('-r, --scroll <pixels>', 'Scroll down by pixels (0 = scroll to bottom)')
     .option('-c, --close-on-idle <seconds>', 'Close window after N seconds of network idle')
     .option('--rename-sequence <pattern>', 'Rename pattern for scraped files')

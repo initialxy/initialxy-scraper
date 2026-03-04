@@ -94,18 +94,18 @@ Command-line arguments for automated web scraping. Browser remains visible (not 
 
 #### Arguments
 
-| Argument            | Shorthand | Type   | Description                                                       |
-| ------------------- | --------- | ------ | ----------------------------------------------------------------- |
-| `[URL]`             | -         | string | Initial URL to navigate to (required, positional argument)        |
-| `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)             |
-| `--output-curl`     | -         | bool   | Output cURL commands to stdout (works with --filter)              |
-| `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl) |
-| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                   |
-| `--wait`            | `-w`      | number | Wait time in seconds after page load                              |
-| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                |
-| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                            |
-| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                |
-| `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                            |
+| Argument            | Shorthand | Type   | Description                                                                                 |
+| ------------------- | --------- | ------ | ------------------------------------------------------------------------------------------- |
+| `[URL]`             | -         | string | Initial URL to navigate to (required, positional argument)                                  |
+| `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)                                       |
+| `--output-curl`     | -         | bool   | Output cURL commands to stdout (works with --filter)                                        |
+| `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl)                           |
+| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                                             |
+| `--wait`            | `-w`      | number | Wait time in seconds after page load before starting idle timer (if --close-on-idle is set) |
+| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                                          |
+| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
+| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                                          |
+| `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
 
 #### Eligibility Logic
 
@@ -129,25 +129,35 @@ When `--selector` specified, extract URLs using priority:
 #### Execution Flow
 
 1. Parse CLI arguments
-2. If `--output` present, register Protocol API handler
-3. Navigate to `--url`
-4. Wait for page load complete
-5. If `--wait`: Buffer responses during wait period
-6. If `--selector`: Apply selector, extract source URLs
-7. If `--scroll`: Scroll down 1px/second until bottom
-   - Re-apply `--selector` after each scroll (via `setTimeout`)
-8. Dump eligible responses to output directory
-9. Close based on `--close-on-idle` logic
+2. Instantiate OutputManager with CLI args
+3. Register Protocol API handler (protocol.ts) - callbacks to main.ts
+4. Navigate to `--url`
+5. Wait for page load complete
+6. If `--wait > 0`: Wait specified seconds (allows dynamic JS elements to load)
+7. Queue page source update to end of event loop: `setTimeout(() => main.updatePageSource(), 0)`
+8. If `--selector`: OutputManager buffers responses in unprocessedResponses
+   - main.ts calls outputManager.updatePageSource(pageSource)
+   - OutputManager extracts source URLs from DOM, normalizes, filters unprocessedResponses
+   - OutputManager processes buffered responses immediately
+9. If `--scroll`: After `--wait` period, scroll webview every second
+   - After each scroll, queue page source update: `setTimeout(() => main.updatePageSource(), 100)`
+10. If `--close-on-idle`: Start idle timer after `--wait` period
+    - Timer resets on navigation events OR onOutput callbacks
+    - If `--selector` also specified: Close when all source URLs completed (tracked via onOutput callbacks)
+11. Output responses:
+    - Without `--selector`: Output immediately when response completes (filtered by --filter if present)
+    - With `--selector`: Output after page source is delivered and filtered
 
 #### Close Behavior
 
-**Without `--close-on-idle`**: Browser stays open for manual inspection
+**Without `--close-on-idle`**: Browser stays open for manual inspection regardless of `--wait`
 
-**With `--close-on-idle`** (evaluated in order):
+**With `--close-on-idle`**: Idle timer starts after page load + `--wait` period (if specified), then closes when network is idle for the specified duration
+
+**Close triggers** (evaluated in order after idle timer starts):
 
 1. If `--selector`: Close when all source URLs have completed
-2. Else if `--wait`: Close when wait period ends
-3. Else: Close when page load finishes
+2. Else: Close when idle timer expires
 
 Timer is independent of `--scroll` and does NOT reset on new discoveries.
 
@@ -160,6 +170,7 @@ Timer is independent of `--scroll` and does NOT reset on new discoveries.
 | 2    | Output directory not writable                          |
 | 3    | Expected selector response failed (404, blocked, etc.) |
 | 4    | URL navigation failed                                  |
+| 5    | File write failure                                     |
 
 #### Examples
 
@@ -234,73 +245,245 @@ All other keyboard shortcuts disabled.
 ### Process Architecture
 
 ```
-Main Process (main.js)
+Main Process (main.ts) - Central Coordinator
 │
 ├── Window Creation
-│   └── Single BrowserWindow (no frame)
-│       ├── WebContents (left panel)
-│       └── Network Panel DIV (right panel, rendered in browser)
+│   └── Single BaseWindow (no frame)
+│       └── Dual WebContentsView
+│           ├── Left: Dynamic webview (external URLs)
+│           └── Right: Fixed 500px panel (local HTML)
 │
-├── Protocol Handler (when --output present)
-│   └── protocol.handle()
+├── Protocol Handler (protocol.ts)
+│   └── protocol.handle() - Request start/complete callbacks to main.ts
 │
-├── WebRequest Listeners
-│   └── session.webRequest.onBeforeRequest/onCompleted
+├── Output Manager (output_manager.ts)
+│   ├── Filters responses based on --filter, --selector, --output-dir, --output-curl
+│   ├── Buffers responses when --selector is active
+│   ├── Processes page source via main.ts.updatePageSource()
+│   └── Outputs to file/console via callbacks to main.ts
+│
+├── Automation Logic
+│   ├── --wait: Delay before page source update
+│   ├── --scroll: Scroll webview every second after --wait
+│   └── --close-on-idle: Timer resets on output events
 │
 └── IPC Handlers
-    └── copy-to-clipboard, get-page-source
+    └── network-request-start/complete → Renderer
+        └── copy-to-clipboard, get-page-source ← Renderer
 ```
 
-### Protocol API for Response Capture
+### Module Responsibilities
+
+**main.ts** (Central Coordinator):
+
+- Window creation and lifecycle management
+- WebContents access (only module with direct access)
+- Register protocol handler from protocol.ts
+- Receive request/response callbacks from protocol.ts
+- Send IPC events to renderer
+- Coordinate automation (--wait, --scroll, --close-on-idle)
+- Pass responses to output_manager.ts
+- Call output_manager.updatePageSource() when needed
+- Receive onOutput callbacks from output_manager.ts
+
+**protocol.ts** (Protocol API Abstraction):
+
+- ONLY handles protocol.handle() registration
+- Forwards ALL requests unchanged (no modification)
+- Callbacks to main.ts: onRequestStarted(request), onResponseCompleted(request, response)
+- Uses separate session partition to avoid infinite recursion
+- NO output logic, NO filtering, NO file I/O
+
+**output_manager.ts** (Output Logic Abstraction):
+
+- Receives CLI args: filter, selector, outputDir, outputCurl, renameSequence, flatDir
+- Maintains unprocessedResponses buffer when --selector is active
+- Receives page source via updatePageSource(pageSource) from main.ts
+- Extracts source URLs from DOM using selector (src, data-src, srcset priority)
+- Normalizes URLs to absolute paths
+- Filters responses based on eligibility logic (filter + selector AND logic)
+- Outputs to file (output-dir) or console (output-curl)
+- Calls main.ts.onOutput(url) when response is output
+- Handles sequential renaming with collision detection
+
+### Protocol API (protocol.ts)
 
 **Modern API (Electron 25+)**: Use `protocol.handle()` - NOT deprecated `registerBufferProtocol()`
 
-```javascript
-const { protocol, net } = require('electron');
-const fs = require('fs');
+**Responsibilities**:
 
-app.whenReady().then(() => {
-  protocol.handle('https', async (request) => {
-    // Forward request and capture response
-    const response = await net.fetch(request.url, {
-      method: request.method,
-      headers: request.headers,
+- ONLY intercept and forward requests
+- Callback to main.ts: `onRequestStarted(request)` with id, url, method, headers
+- Callback to main.ts: `onResponseCompleted(request, response)` with id, url, statusCode, headers, body
+- NO file I/O, NO filtering, NO output logic
+
+**Implementation Pattern**:
+
+```typescript
+// protocol.ts
+export class ProtocolHandler {
+  private callbacks: ProtocolCallbacks;
+  private inFlight = new Set<string>();
+
+  constructor(baseUrl: string, callbacks: ProtocolCallbacks) {
+    this.baseUrl = baseUrl;
+    this.callbacks = callbacks;
+  }
+
+  register(session: Session): void {
+    session.protocol.handle('https', async (request) => {
+      // Track in-flight request
+      this.inFlight.add(request.url);
+
+      // Callback: request started
+      this.callbacks.onRequestStarted({
+        id: request.id,
+        url: request.url,
+        method: request.method,
+        headers: request.headers,
+      });
+
+      try {
+        // Forward request using bypass session to avoid recursion
+        const response = await net.fetch(request.url, {
+          method: request.method,
+          headers: request.headers,
+        });
+
+        // Callback: response complete
+        this.callbacks.onResponseCompleted({
+          id: request.url,
+          url: request.url,
+          statusCode: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: Buffer.from(await response.arrayBuffer()),
+        });
+
+        // Return original response unchanged
+        return new Response(response.body, {
+          status: response.status,
+          headers: response.headers,
+        });
+      } finally {
+        this.inFlight.delete(request.url);
+      }
     });
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    // Save to disk
-    const filename = generateFilename(request.url);
-    fs.writeFileSync(path.join(outputDir, filename), buffer);
-
-    // Return ORIGINAL response (unchanged)
-    return new Response(buffer, {
-      status: response.status,
-      headers: response.headers,
-    });
-  });
-});
+  }
+}
 ```
 
 **Critical Requirements**:
 
 - Register in `app.whenReady()` - BEFORE any navigation
-- Use `net.fetch()` to forward request - do NOT block/modify
+- Use bypass session (`session.fromPartition('persist:bypass')`) for internal fetch
+- Track in-flight URLs with `Set` to detect recursive calls
 - Return `Response` object with original status/headers
 - Works at session level - independent of window type
+- **NO output logic** - just callbacks to main.ts
 
-**Why it works**: Protocol handlers intercept at network layer, before request leaves browser. We fetch the actual response, capture it, then return it unchanged to the page.
+**Why bypass session?**: Using `net.fetch()` or the default session triggers the protocol handler again, causing infinite recursion.
 
-**Performance**: Adds overhead - only enable when `--output` flag present.
+### Output Manager (output_manager.ts)
+
+**Responsibilities**:
+
+- Filter responses based on `--filter` regex and `--selector` DOM matching
+- Buffer responses when `--selector` is active (wait for page source)
+- Extract source URLs from HTML using jsdom (src, data-src, srcset priority)
+- Normalize URLs to absolute paths
+- Output to file (output-dir) or console (output-curl)
+- Callback to main.ts: `onOutput(url)` when response is output (resets idle timer)
+
+**Eligibility Logic**:
+
+1. **No filters**: All responses eligible
+2. **`--filter` only**: Response URL matches regex
+3. **`--selector` only**: Response URL matches source attribute of selected DOM element
+4. **Both `--filter` and `--selector`**: Response must match BOTH (AND logic)
+
+**Source Attribute Extraction** (jsdom parsing):
+
+1. `src` attribute
+2. `data-src` attribute
+3. `srcset` attribute (parse ALL URLs, preserve order)
+
+**Response Processing Flow**:
+
+```typescript
+// When response completes
+outputManager.responseCompleted(request, response) {
+  if (this.selector) {
+    // Buffer response, wait for page source
+    this.unprocessedResponses.push({ request, response });
+    return;
+  }
+
+  // No selector: process immediately
+  this.processResponse(request, response);
+}
+
+// When main.ts calls updatePageSource
+outputManager.updatePageSource(pageSource): void {
+  // Parse HTML with jsdom - sourceUrls is local, not state
+  const sourceUrls = extractSourceUrls(pageSource, this.selector);
+
+  // Filter buffered responses
+  for (const { request, response } of this.unprocessedResponses) {
+    if (this.isEligible(response.url, sourceUrls)) {
+      this.processResponse(request, response);
+    }
+  }
+
+  // Clear buffer
+  this.unprocessedResponses = [];
+}
+
+// Output to file or console
+outputManager.processResponse(request, response) {
+  if (this.outputCurl) {
+    console.log(generateCurl(request.method, request.url, request.headers));
+  }
+
+  if (this.outputDir) {
+    const filename = this.generateFilename(response.url);
+    const filepath = path.join(this.outputDir, filename);
+    fs.mkdirSync(path.dirname(filepath), { recursive: true });
+    fs.writeFileSync(filepath, response.body);
+    // Exit code 5 on file write failure
+  }
+
+  // Notify main.ts (resets idle timer)
+  this.callbacks.onOutput(response.url);
+}
+```
+
+**API**:
+
+```typescript
+class OutputManager {
+  constructor(options: {
+    outputDir?: string;
+    filter?: RegExp;
+    selector?: string;
+    renameSequence?: string;
+    outputCurl?: boolean;
+    flatDir?: boolean;
+    onOutput: (url: string) => void;
+  });
+
+  responseCompleted(request: Request, response: Response): void;
+  updatePageSource(pageSource: string): void;
+}
+```
 
 ### IPC Channels
 
-| Channel                    | Direction       | Purpose           |
-| -------------------------- | --------------- | ----------------- |
-| `network-request-start`    | Main → Renderer | Request started   |
-| `network-request-complete` | Main → Renderer | Response complete |
-| `copy-to-clipboard`        | Renderer → Main | Copy text         |
-| `get-page-source`          | Renderer → Main | Get HTML source   |
+| Channel                    | Direction       | Purpose                             |
+| -------------------------- | --------------- | ----------------------------------- |
+| `network-request-start`    | Main → Renderer | Request started (id, url, method)   |
+| `network-request-complete` | Main → Renderer | Response complete (id, url, status) |
+| `copy-to-clipboard`        | Renderer → Main | Copy text to clipboard              |
+| `get-page-source`          | Renderer → Main | Get HTML source from main frame     |
 
 ### cURL Generation
 
@@ -369,6 +552,14 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] Alt+Left/Right arrow keys work for back/forward navigation
 - [ ] Window is focusable and resizable
 
+### Module Architecture
+
+- [ ] **main.ts**: Central coordinator with WebContents access only
+- [ ] **protocol.ts**: Protocol API abstraction with callbacks to main.ts
+- [ ] **output_manager.ts**: Output logic with callbacks to main.ts
+- [ ] No circular dependencies between modules
+- [ ] Clear separation: protocol.ts has NO output logic, output_manager.ts has NO WebContents access
+
 ### Network Monitor Panel
 
 - [ ] Panel displays all network requests chronologically
@@ -386,16 +577,18 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] Browser remains visible during scraping (not headless)
 - [ ] All CLI arguments work as specified
 - [ ] Output directory auto-created
-- [ ] Protocol API captures and saves responses correctly
-- [ ] Protocol API does NOT modify or block requests
+- [ ] Protocol handler forwards requests unchanged
+- [ ] OutputManager buffers responses when --selector is active
+- [ ] OutputManager processes buffered responses after updatePageSource()
 - [ ] Filter and selector eligibility logic works
 - [ ] Source extraction uses correct priority (src, data-src, srcset)
 - [ ] srcset parsing extracts ALL URLs in order
 - [ ] URL normalization converts to absolute paths
-- [ ] Selector re-applies after each scroll (via setTimeout)
+- [ ] Selector re-applies after each scroll (via setTimeout in main.ts)
 - [ ] Scroll stops at page bottom
+- [ ] --wait defaults to 0, but still queues page source update
 - [ ] Wait, scroll, and close-on-idle automation works
-- [ ] `--close-on-idle` independent of `--scroll`, no reset on discoveries
+- [ ] --close-on-idle resets on onOutput callbacks
 - [ ] Sequential renaming preserves DOM order when selector given
 - [ ] Correct exit codes returned
 

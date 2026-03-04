@@ -48,18 +48,18 @@ npm start -- --verbose --output-dir ./debug https://example.com
 
 ### CLI Arguments
 
-| Argument            | Shorthand | Type   | Description                                                       |
-| ------------------- | --------- | ------ | ----------------------------------------------------------------- |
-| `[URL]`             | -         | string | Initial URL to navigate to (required, positional)                 |
-| `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)             |
-| `--output-curl`     | -         | bool   | Output cURL commands to stdout                                    |
-| `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl) |
-| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                   |
-| `--wait`            | `-w`      | number | Wait time in seconds after page load                              |
-| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                |
-| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                            |
-| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                |
-| `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                            |
+| Argument            | Shorthand | Type   | Description                                                                                 |
+| ------------------- | --------- | ------ | ------------------------------------------------------------------------------------------- |
+| `[URL]`             | -         | string | Initial URL to navigate to (required, positional)                                           |
+| `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)                                       |
+| `--output-curl`     | -         | bool   | Output cURL commands to stdout                                                              |
+| `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl)                           |
+| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                                             |
+| `--wait`            | `-w`      | number | Wait time in seconds after page load before starting idle timer (if --close-on-idle is set) |
+| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                                          |
+| `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
+| `--rename-sequence` | -         | string | Sprintf format for sequential naming (e.g., `05d`)                                          |
+| `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
 
 ### Keyboard Navigation
 
