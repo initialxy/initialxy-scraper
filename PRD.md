@@ -206,18 +206,7 @@ initialxy-scraper --selector "img" --rename-sequence 05d --output-dir ./images h
 initialxy-scraper --verbose --output-dir ./debug https://example.com
 ```
 
-### 3. Keyboard Navigation
-
-**Only supported hotkeys**:
-
-| Hotkey              | Action           |
-| ------------------- | ---------------- |
-| `Alt + Left Arrow`  | Navigate back    |
-| `Alt + Right Arrow` | Navigate forward |
-
-All other keyboard shortcuts disabled.
-
-### 4. User Data Management
+### 3. User Data Management
 
 **Directory Structure**:
 

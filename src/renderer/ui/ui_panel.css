@@ -127,11 +127,9 @@ body {
 }
 .request-row .url {
   color: #ccc;
-  direction: rtl;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
-  unicode-bidi: plaintext;
 }
 .footer {
   padding: 12px 16px;
