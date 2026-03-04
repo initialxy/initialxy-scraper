@@ -1,133 +1,67 @@
-import type { WebContentsView } from 'electron';
-import type { CLIArgs } from './types.ts';
+const MS_IN_S = 1000;
+const POST_SCROLL_WAIT_MS = 100;
 
 export class AutomationManager {
-  private webView: WebContentsView | null | undefined;
-  public cliArgs: CLIArgs;
-  private scrollInterval: NodeJS.Timeout | null = null;
+  private waitS: number;
+  private scrollIntervalS: number;
+  private closeOnIdleTimeS: number | null;
+  private onScrollRequested: () => Promise<void>;
+  private onUpdateRequested: () => Promise<void>;
+  private onCloseRequested: () => void;
+
   private idleTimer: NodeJS.Timeout | null = null;
-  private lastActivityTime: number;
+  private isRunning: boolean;
 
-  constructor(webView: WebContentsView | null | undefined, cliArgs: CLIArgs) {
-    this.webView = webView;
-    this.cliArgs = cliArgs;
-    this.lastActivityTime = Date.now();
+  constructor(options: {
+    waitS: number;
+    scrollIntervalS: number;
+    closeOnIdleTimeS: number | null;
+    onScrollRequested: () => Promise<void>;
+    onUpdateRequested: () => Promise<void>;
+    onCloseRequested: () => void;
+  }) {
+    this.waitS = options.waitS;
+    this.scrollIntervalS = options.scrollIntervalS;
+    this.closeOnIdleTimeS = options.closeOnIdleTimeS;
+    this.onScrollRequested = options.onScrollRequested;
+    this.onUpdateRequested = options.onUpdateRequested;
+    this.onCloseRequested = options.onCloseRequested;
+    this.isRunning = false;
   }
 
-  /**
-   * Initialize wait functionality
-   */
-  initializeWait(): void {
-    if (!this.cliArgs.wait) return;
+  start(): void {
+    if (this.isRunning) {
+      return;
+    }
 
-    console.debug(`[Automation] Waiting ${this.cliArgs.wait} seconds...`);
+    this.isRunning = true;
+
     setTimeout(async () => {
-      console.debug('[Automation] Wait period complete');
-      // Import here to avoid circular dependency
-      const { updatePageSource } = await import('../main/main.ts');
-      await updatePageSource();
-    }, this.cliArgs.wait * 1000);
-  }
-
-  /**
-   * Initialize scroll functionality
-   */
-  initializeScroll(): void {
-    if (!this.cliArgs.scroll) return;
-
-    console.debug(`[Automation] Scrolling ${this.cliArgs.scroll}px per second...`);
-
-    // Start scrolling after --wait period
-    const delay = this.cliArgs.wait ? this.cliArgs.wait * 1000 : 0;
-    setTimeout(() => {
-      this.startScrolling();
-    }, delay);
-  }
-
-  /**
-   * Initialize close-on-idle functionality
-   */
-  initializeCloseOnIdle(): void {
-    if (!this.cliArgs.closeOnIdle) return;
-
-    // Start idle timer after --wait period
-    const delay = this.cliArgs.wait ? this.cliArgs.wait * 1000 : 0;
-    setTimeout(() => {
+      await this.onUpdateRequested();
+      this.startScroll();
       this.startIdleTimer();
-    }, delay);
+    }, this.waitS * MS_IN_S);
   }
 
-  /**
-   * Start scrolling the page
-   */
-  private startScrolling(): void {
-    // Import here to avoid circular dependency
-    import('../main/main.ts').then(({ scrollAndUpdate }) => {
-      this.scrollInterval = setInterval(async () => {
-        await scrollAndUpdate();
-
-        // Check if at bottom of page
-        try {
-          const atBottom = await this.webView!.webContents.executeJavaScript(
-            'document.documentElement.scrollHeight <= (window.pageYOffset + window.innerHeight + 1)'
-          );
-          if (atBottom) {
-            console.debug('[Automation] Reached bottom of page, stopping scroll');
-            if (this.scrollInterval) {
-              clearInterval(this.scrollInterval);
-              this.scrollInterval = null;
-            }
-          }
-        } catch (error) {
-          console.error('[Automation] Error checking scroll position:', error);
-        }
-      }, 1000);
-    });
+  private startScroll(): void {
+    setInterval(async () => {
+      await this.onScrollRequested();
+      setTimeout(async () => {
+        await this.onUpdateRequested();
+      }, POST_SCROLL_WAIT_MS);
+    }, this.scrollIntervalS * MS_IN_S);
   }
 
-  /**
-   * Start idle timer for close-on-idle
-   */
   private startIdleTimer(): void {
-    const checkIdle = (): void => {
-      const idleTime = (Date.now() - this.lastActivityTime) / 1000;
+    if (!this.closeOnIdleTimeS) return;
 
-      if (idleTime >= this.cliArgs.closeOnIdle!) {
-        console.debug(`[Automation] Idle for ${Math.floor(idleTime)} seconds, closing...`);
-        setTimeout(() => process.exit(0), 100);
-        return;
-      }
-
-      this.idleTimer = setTimeout(checkIdle, 1000);
-    };
-
-    this.idleTimer = setTimeout(checkIdle, 1000);
+    this.idleTimer = setTimeout(this.onCloseRequested, this.closeOnIdleTimeS * MS_IN_S);
   }
 
-  /**
-   * Reset idle timer on output event
-   */
   onOutputEvent(): void {
-    this.lastActivityTime = Date.now();
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-    }
+    if (!this.closeOnIdleTimeS) return;
+
+    clearTimeout(this.idleTimer);
     this.startIdleTimer();
-  }
-
-  /**
-   * Clean up all automation timers
-   */
-  cleanup(): void {
-    if (this.scrollInterval) {
-      clearInterval(this.scrollInterval);
-      this.scrollInterval = null;
-    }
-
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-    }
   }
 }

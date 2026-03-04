@@ -252,10 +252,23 @@ app.whenReady().then(async () => {
 
   // Initialize automation manager after window is created
   if (webView?.webContents) {
-    automationManager = new AutomationManager(webView, cliArgs);
-    automationManager.initializeWait();
-    automationManager.initializeScroll();
-    automationManager.initializeCloseOnIdle();
+    automationManager = new AutomationManager({
+      waitS: cliArgs.wait || 0,
+      scrollIntervalS: 1,
+      closeOnIdleTimeS: cliArgs.closeOnIdle || null,
+      onScrollRequested: async () => {
+        await webView?.webContents.executeJavaScript(
+          `window.scrollBy(0, ${cliArgs.scroll || 100});`
+        );
+      },
+      onUpdateRequested: async () => {
+        await updatePageSource();
+      },
+      onCloseRequested: () => {
+        process.exit(0);
+      },
+    });
+    automationManager.start();
   }
 
   // Show the window
@@ -286,25 +299,5 @@ export async function updatePageSource(): Promise<void> {
     outputManager.updatePageSource(pageSource);
   } catch (error) {
     console.error('[Main] Error getting page source:', error);
-  }
-}
-
-/**
- * Scroll page and update page source if selector is active
- */
-export async function scrollAndUpdate(): Promise<void> {
-  if (!webView?.webContents) return;
-  try {
-    const scrollAmount = automationManager?.cliArgs?.scroll || 100;
-    await webView.webContents.executeJavaScript(`
-      window.scrollBy(0, ${scrollAmount});
-    `);
-
-    // Update page source if selector is active
-    if (automationManager?.cliArgs?.selector) {
-      await updatePageSource();
-    }
-  } catch (error) {
-    console.error('[Main] Error scrolling:', error);
   }
 }
