@@ -8,6 +8,10 @@ Additionally, I wanted to use this exercise to play with a **fully local** vibe 
 
 **Electron**: 40.6.1 | **Node**: 24.x+ | **TypeScript**: 5.9.3
 
+## Security Warning
+
+**DO NOT use this browser for normal web browsing or personal activities.** This browser is designed exclusively for web scraping and automation purposes, coordinated by external scripts. It lacks essential security features and protections found in regular browsers. Use only for its intended purpose.
+
 ## Features
 
 - **No DevTools, Debugger or Automation activation**: Avoid detection by modern anti-scraping solutions
