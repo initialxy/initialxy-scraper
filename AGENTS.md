@@ -83,7 +83,7 @@ BaseWindow (1200x800)
 2. **Bypass Session**: `session.fromPartition('persist:bypass')` prevents infinite recursion
 3. **Selector Buffering**: OutputManager buffers responses until `updatePageSource()` called
 4. **Page Source Updates**: Triggered by `--wait` completion, `--scroll` intervals, or `did-finish-load` (when `--selector` set without `--wait`)
-5. **Exit Code 5**: File write failure
+5. **Exit codes defined in constants.ts**
 6. **RESPONSE_WITHOUT_BODY**: Set([204, 304]) for clean status code handling
 
 ---
@@ -103,6 +103,8 @@ BaseWindow (1200x800)
 | `--rename-sequence` | -         | string | Sprintf format (e.g., `05d`)    |
 | `--verbose`         | `-v`      | bool   | Enable verbose logging          |
 | `--flat-dir`        | -         | bool   | Flat output directory           |
+| `--width`           | `-W`      | number | Initial window width            |
+| `--height`          | `-H`      | number | Initial window height           |
 
 **Eligibility Logic**: `--filter` AND `--selector` (both must match if specified)
 

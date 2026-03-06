@@ -81,17 +81,16 @@ npm start -- --verbose --output-dir ./debug https://initialxy.com
 | `--rename-sequence` | -         | string | Number of digits for zero-padding (e.g., `4` for `0001`, `05` for `00001`)                  |
 | `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
 | `--flat-dir`        | -         | bool   | Flat output directory (no subdirectories)                                                   |
+| `--width`           | `-W`      | number | Initial window width in pixels                                                              |
+| `--height`          | `-H`      | number | Initial window height in pixels                                                             |
 
 ## Exit Codes
 
-| Code | Meaning                                                |
-| ---- | ------------------------------------------------------ |
-| 0    | Success                                                |
-| 1    | Invalid command line arguments                         |
-| 2    | Output directory not writable                          |
-| 3    | Expected selector response failed (404, blocked, etc.) |
-| 4    | URL navigation failed                                  |
-| 5    | File write failure                                     |
+| Code | Meaning                        |
+| ---- | ------------------------------ |
+| 0    | Success                        |
+| 1    | Invalid command line arguments |
+| 2    | File write failure             |
 
 ## Development
 

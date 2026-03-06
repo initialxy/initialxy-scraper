@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { Command } from 'commander';
 import path from 'node:path';
 import type { CLIArgs } from './types.ts';
+import { EXIT_CODES } from './constants.ts';
 
 /**
  * Parse CLI arguments using commander
@@ -41,7 +42,7 @@ export function parseCLIArgs(): CLIArgs {
   if (args.length === 0) {
     console.error('Error: URL argument is required');
     program.outputHelp();
-    process.exit(1);
+    process.exit(EXIT_CODES.invalidCommandLineArgs);
   }
 
   let url = args[0];

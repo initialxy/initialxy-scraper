@@ -17,3 +17,12 @@ export type IPCChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
 // HTTP responses without body
 export const RESPONSE_WITHOUT_BODY = new Set([204, 304]);
+
+// Exit codes
+export const EXIT_CODES = {
+  success: 0,
+  invalidCommandLineArgs: 1,
+  fileWriteFailure: 2,
+} as const;
+
+export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];

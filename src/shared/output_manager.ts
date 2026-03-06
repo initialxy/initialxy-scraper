@@ -6,7 +6,7 @@ import {
   normalizeUrlWithBase,
 } from './backend_utils.ts';
 import { generateCurl, generateFFmpegCommand, isM3u8 } from './cross_stack_utils.ts';
-import { RESPONSE_WITHOUT_BODY } from './constants.ts';
+import { RESPONSE_WITHOUT_BODY, EXIT_CODES } from './constants.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -178,7 +178,7 @@ export class OutputManager {
       fs.writeFileSync(filepath, response.body);
     } catch (error) {
       console.error(`[OutputManager] Error writing file:`, error);
-      process.exit(5);
+      process.exit(EXIT_CODES.fileWriteFailure);
     }
   }
 

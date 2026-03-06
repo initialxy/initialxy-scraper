@@ -3,7 +3,7 @@ import { AutomationManager } from '../shared/automation.ts';
 import { OutputManager } from '../shared/output_manager.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
 import { ProtocolHandler } from '../shared/protocol.ts';
-import { MILD_DELAY_MS } from '../shared/constants.ts';
+import { MILD_DELAY_MS, EXIT_CODES } from '../shared/constants.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CLIArgs } from '../shared/types.ts';
@@ -215,7 +215,7 @@ app.whenReady().then(async () => {
         await updatePageSource();
       },
       onCloseRequested: () => {
-        process.exit(0);
+        process.exit(EXIT_CODES.success);
       },
     });
     automationManager.start();

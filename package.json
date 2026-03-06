@@ -1,6 +1,6 @@
 {
   "name": "initialxy-scraper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Minimal browser meant for scripted scraping",
   "license": "MIT",
   "author": "initialxy@gmail.com",

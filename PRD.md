@@ -106,6 +106,9 @@ Command-line arguments for automated web scraping. Browser remains visible (not 
 | `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
 | `--rename-sequence` | -         | string | Number of digits for padding.                                                               |
 | `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
+| `--flat-dir`        | -         | bool   | Flat output directory (no subdirectories)                                                   |
+| `--width`           | `-W`      | number | Initial window width in pixels                                                              |
+| `--height`          | `-H`      | number | Initial window height in pixels                                                             |
 
 #### Eligibility Logic
 
@@ -162,14 +165,11 @@ Timer is independent of `--scroll` and does NOT reset on new discoveries.
 
 #### Exit Codes
 
-| Code | Meaning                                                |
-| ---- | ------------------------------------------------------ |
-| 0    | Success                                                |
-| 1    | Invalid command line arguments                         |
-| 2    | Output directory not writable                          |
-| 3    | Expected selector response failed (404, blocked, etc.) |
-| 4    | URL navigation failed                                  |
-| 5    | File write failure                                     |
+| Code | Meaning                        |
+| ---- | ------------------------------ |
+| 0    | Success                        |
+| 1    | Invalid command line arguments |
+| 2    | File write failure             |
 
 #### Examples
 
