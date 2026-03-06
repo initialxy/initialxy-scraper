@@ -96,26 +96,25 @@ function createWindow(cliArgs: CLIArgs): {
 
   // Set bounds after window is shown (BaseWindow doesn't have ready-to-show)
   const setupViewBounds = () => {
+    const [width, height] = win.getContentSize();
     if (!webView || !uiView) return;
-    const bounds = win.getBounds();
     webView.setBounds({
       x: 0,
       y: 0,
-      width: bounds.width - RIGHT_PANEL_WIDTH,
-      height: bounds.height,
+      width: width - RIGHT_PANEL_WIDTH,
+      height: height,
     });
     uiView.setBounds({
-      x: bounds.width - RIGHT_PANEL_WIDTH,
+      x: width - RIGHT_PANEL_WIDTH,
       y: 0,
       width: RIGHT_PANEL_WIDTH,
-      height: bounds.height,
+      height: height,
     });
   };
 
-  // BaseWindow has 'show' event but it's not in the TypeScript types
-  win.addListener('show', setupViewBounds);
 
-  // Handle window resize - left panel resizes, right panel stays fixed
+  win.on('show', setupViewBounds);
+  win.on('focus', setupViewBounds);
   win.on('resize', setupViewBounds);
 
   // Setup IPC handlers for UI panel
