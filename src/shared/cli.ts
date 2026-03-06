@@ -29,7 +29,9 @@ export function parseCLIArgs(): CLIArgs {
     )
     .option('-v, --verbose', 'Enable verbose logging for network traffic')
     .option('--output-curl', 'Output curl commands for matching URLs to stdout')
-    .option('--flat-dir', 'Dump files flat in output-dir without subdirectories');
+    .option('--flat-dir', 'Dump files flat in output-dir without subdirectories')
+    .option('-W, --width <pixels>', 'Initial window width')
+    .option('-H, --height <pixels>', 'Initial window height');
 
   program.parse();
 
@@ -91,6 +93,14 @@ export function parseCLIArgs(): CLIArgs {
 
   if (options.flatDir) {
     result.flatDir = true;
+  }
+
+  if (options.width) {
+    result.width = parseInt(options.width, 10);
+  }
+
+  if (options.height) {
+    result.height = parseInt(options.height, 10);
   }
 
   return result;

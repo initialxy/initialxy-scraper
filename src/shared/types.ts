@@ -12,6 +12,8 @@ export interface CLIArgs {
   verbose?: boolean;
   outputCurl?: boolean;
   flatDir?: boolean;
+  width?: number;
+  height?: number;
 }
 
 export interface NetworkRequest {

@@ -20,8 +20,8 @@ function createWindow(cliArgs: CLIArgs): {
 } {
   // Create a BaseWindow (not BrowserWindow) for multi-view support
   const win = new BaseWindow({
-    width: 1200,
-    height: 800,
+    width: cliArgs.width ?? 1200,
+    height: cliArgs.height ?? 1000,
     autoHideMenuBar: true,
   });
 
@@ -111,7 +111,6 @@ function createWindow(cliArgs: CLIArgs): {
       height: height,
     });
   };
-
 
   win.on('show', setupViewBounds);
   win.on('focus', setupViewBounds);
