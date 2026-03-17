@@ -242,7 +242,10 @@ Main Process (main.ts) - Central Coordinator
 │           └── Right: Fixed 500px panel (local HTML)
 │
 ├── Protocol Handler (protocol.ts)
-│   └── protocol.handle() - Request start/complete callbacks to main.ts
+│   ├── protocol.handle() - Request start/complete callbacks to main.ts
+│   └── Cookie management:
+│       - Retrieves cookies from webContents session for outgoing requests
+│       - Stores cookies from Set-Cookie response headers
 │
 ├── Output Manager (output_manager.ts)
 │   ├── Filters responses based on --filter, --selector, --output-dir, --output-curl
@@ -278,20 +281,24 @@ Main Process (main.ts) - Central Coordinator
 
 - ONLY handles protocol.handle() registration
 - Forwards ALL requests unchanged (no modification)
-- Callbacks to main.ts: onRequestStarted(request), onResponseCompleted(request, response)
-- Uses separate session partition to avoid infinite recursion
-- NO output logic, NO filtering, NO file I/O
+- **Cookie Management**:
+  - Retrieves cookies from webContents session for outgoing requests via `session.cookies.get()`
+  - Stores cookies from Set-Cookie response headers via `session.cookies.set()`
+  - Parses Set-Cookie attributes (domain, path, expires, secure, httponly, samesite)
+  - Uses webContents session partition for persistent cookie storage
+- Callbacks to main.ts: `onRequestStarted(request)`, `onResponseCompleted(request, response)`
+- Uses `inFlight` Set to prevent infinite recursion
+- **NO output logic**, **NO filtering**, **NO file I/O**
 
 **output_manager.ts** (Output Logic Abstraction):
 
 - Receives CLI args: filter, selector, outputDir, outputCurl, renameSequence, flatDir
 - Maintains unprocessedResponses buffer when --selector is active
 - Receives page source via updatePageSource(pageSource) from main.ts
-- Extracts source URLs from DOM using selector (src, data-src priority)
+- Extracts source URLs from HTML using jsdom (src, data-src priority)
 - Normalizes URLs to absolute paths
-- Filters responses based on eligibility logic (filter + selector AND logic)
 - Outputs to file (output-dir) or console (output-curl)
-- Calls main.ts.onOutput(url) when response is output
+- Callback to main.ts: `onOutput(url)` when response is output
 - Handles sequential renaming with collision detection
 
 ### Protocol API (protocol.ts)
@@ -303,6 +310,11 @@ Main Process (main.ts) - Central Coordinator
 - ONLY intercept and forward requests
 - Callback to main.ts: `onRequestStarted(request)` with id, url, method, headers
 - Callback to main.ts: `onResponseCompleted(request, response)` with id, url, statusCode, headers, body
+- **Cookie Management**:
+  - Retrieves cookies from webContents session for outgoing requests
+  - Stores cookies from Set-Cookie response headers
+  - Parses Set-Cookie attributes (domain, path, expires, secure, httponly, samesite)
+  - Persists cookies in webContents session partition
 - NO file I/O, NO filtering, NO output logic
 
 **Implementation Pattern**:
@@ -310,52 +322,157 @@ Main Process (main.ts) - Central Coordinator
 ```typescript
 // protocol.ts
 export class ProtocolHandler {
+  private baseUrl: string;
   private callbacks: ProtocolCallbacks;
   private inFlight = new Set<string>();
+  private webContentsSession: Electron.Session;
 
-  constructor(baseUrl: string, callbacks: ProtocolCallbacks) {
+  constructor(baseUrl: string, callbacks: ProtocolCallbacks, webContentsSession: Electron.Session) {
     this.baseUrl = baseUrl;
     this.callbacks = callbacks;
+    this.webContentsSession = webContentsSession;
   }
 
-  register(session: Session): void {
-    session.protocol.handle('https', async (request) => {
-      // Track in-flight request
-      this.inFlight.add(request.url);
+  register(): void {
+    protocol.handle('https', this.handleRequest.bind(this));
+    protocol.handle('http', this.handleRequest.bind(this));
+  }
+
+  private async handleRequest(request: Request): Promise<Response> {
+    const url = request.url;
+    const headersObj: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      headersObj[key] = value;
+    });
+
+    // Get cookies from webContents session and add to request headers
+    const cookies = await this.getCookiesForUrl(url);
+    if (cookies) {
+      headersObj['Cookie'] = cookies;
+    }
+
+    // Prevent infinite recursion
+    if (this.inFlight.has(url)) {
+      const response = await fetch(url, {
+        method: request.method,
+        headers: headersObj,
+      });
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return new Response(RESPONSE_WITHOUT_BODY.has(response.status) ? null : buffer, {
+        status: response.status,
+        headers: response.headers,
+      });
+    }
+
+    this.inFlight.add(url);
+
+    try {
+      // Forward request using net.fetch which bypasses custom protocol handlers
+      const response = await net.fetch(url, {
+        method: request.method,
+        headers: headersObj,
+      });
+
+      const buffer = Buffer.from(await response.arrayBuffer());
 
       // Callback: request started
       this.callbacks.onRequestStarted({
-        id: request.id,
-        url: request.url,
+        id: ++this.requestIdCounter,
+        url,
         method: request.method,
-        headers: request.headers,
+        headers: headersObj,
       });
 
-      try {
-        // Forward request using bypass session to avoid recursion
-        const response = await net.fetch(request.url, {
-          method: request.method,
-          headers: request.headers,
-        });
-
-        // Callback: response complete
-        this.callbacks.onResponseCompleted({
-          id: request.url,
-          url: request.url,
-          statusCode: response.status,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: Buffer.from(await response.arrayBuffer()),
-        });
-
-        // Return original response unchanged
-        return new Response(response.body, {
-          status: response.status,
-          headers: response.headers,
-        });
-      } finally {
-        this.inFlight.delete(request.url);
+      // Extract Set-Cookie headers and store them in the session
+      const setCookieHeader = response.headers.get('Set-Cookie');
+      if (setCookieHeader) {
+        const cookieStrings = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+        await this.storeCookies(url, cookieStrings);
       }
-    });
+
+      // Callback: response complete
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      this.callbacks.onResponseCompleted(
+        {
+          id: this.requestIdCounter,
+          url,
+          method: request.method,
+          headers: headersObj,
+        },
+        {
+          statusCode: response.status,
+          body: buffer,
+          headers: responseHeaders,
+        }
+      );
+
+      // Return original response unchanged
+      return new Response(RESPONSE_WITHOUT_BODY.has(response.status) ? null : buffer, {
+        status: response.status,
+        headers: response.headers,
+      });
+    } finally {
+      this.inFlight.delete(url);
+    }
+  }
+
+  private async getCookiesForUrl(url: string): Promise<string | null> {
+    try {
+      const cookies = await this.webContentsSession.cookies.get({ url });
+      if (cookies && cookies.length > 0) {
+        const cookieString = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+        return cookieString;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async storeCookies(url: string, cookieStrings: string[]): Promise<void> {
+    try {
+      const urlObj = new URL(url);
+      const promises = cookieStrings.map(async (cookieStr) => {
+        // Parse the Set-Cookie header value
+        const parts = cookieStr.split(';').map((p) => p.trim());
+        const [nameValue, ...attributes] = parts;
+        const [name, value] = nameValue.split('=');
+
+        if (!name || !value) {
+          return;
+        }
+
+        // Extract expiration date if present
+        const expiresAttr = attributes.find((a) => a.toLowerCase().startsWith('expires='));
+        const hasExpiration = !!expiresAttr;
+        const expirationDate = hasExpiration
+          ? new Date(expiresAttr.split('=')[1]).getTime() / 1000
+          : undefined;
+
+        const cookie = {
+          name: name,
+          value: value,
+          url: url,
+          domain: attributes.find((a) => a.toLowerCase().startsWith('domain='))?.split('=')[1] || urlObj.hostname,
+          path: attributes.find((a) => a.toLowerCase().startsWith('path='))?.split('=')[1] || '/',
+          session: !hasExpiration,
+          expirationDate: expirationDate,
+          secure: attributes.some((a) => a.toLowerCase() === 'secure' || urlObj.protocol === 'https:'),
+          httpOnly: attributes.some((a) => a.toLowerCase() === 'httponly'),
+          sameSite: attributes.find((a) => a.toLowerCase().startsWith('samesite='))?.split('=')[1]?.toLowerCase() as 'unspecified' | 'no_restriction' | 'lax' | 'strict' | undefined,
+        };
+
+        await this.webContentsSession.cookies.set(cookie);
+      });
+
+      await Promise.all(promises);
+    } catch {
+      // Silently fail - cookie storage is best-effort
+    }
   }
 }
 ```
@@ -363,13 +480,12 @@ export class ProtocolHandler {
 **Critical Requirements**:
 
 - Register in `app.whenReady()` - BEFORE any navigation
-- Use bypass session (`session.fromPartition('persist:bypass')`) for internal fetch
+- Use webContents session for cookie storage (persistent across sessions)
 - Track in-flight URLs with `Set` to detect recursive calls
 - Return `Response` object with original status/headers
 - Works at session level - independent of window type
 - **NO output logic** - just callbacks to main.ts
-
-**Why bypass session?**: Using `net.fetch()` or the default session triggers the protocol handler again, causing infinite recursion.
+- **Cookie persistence**: Cookies are stored in webContents session partition and persist across browser restarts
 
 ### Output Manager (output_manager.ts)
 
@@ -577,6 +693,17 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] --close-on-idle resets on onOutput callbacks
 - [ ] Sequential renaming preserves DOM order when selector given
 - [ ] Correct exit codes returned
+
+### Cookie Support
+
+- [ ] Cookies are retrieved from webContents session for outgoing requests
+- [ ] Cookies are stored from Set-Cookie response headers
+- [ ] Cookie attributes are parsed correctly (domain, path, expires, secure, httponly, samesite)
+- [ ] Cookies persist across browser restarts (stored in userdata/Default/Cookies)
+- [ ] Session cookies (no expiration) are handled correctly
+- [ ] Secure flag is respected for HTTPS-only cookies
+- [ ] httpOnly flag is tracked (though not accessible to JavaScript)
+- [ ] SameSite attribute is parsed and stored
 
 ### Security & Detection
 
