@@ -40,7 +40,8 @@ BaseWindow (1200x800)
 
 - **ONLY** protocol interception via `protocol.handle()`
 - Callbacks: `onRequestStarted()`, `onResponseCompleted()`
-- Uses bypass session (`persist:bypass`) to prevent infinite recursion
+- Manages cookies: retrieves from session for requests, stores from `Set-Cookie` responses
+- Uses `inFlight` Set to prevent infinite recursion
 - **NO** filtering, file I/O, or output logic
 
 ### OutputManager (`src/shared/output_manager.ts`)
@@ -80,11 +81,12 @@ BaseWindow (1200x800)
 ## Critical Implementation Details
 
 1. **Protocol Handler Timing**: Load `about:blank` → register handler → navigate to URL
-2. **Bypass Session**: `session.fromPartition('persist:bypass')` prevents infinite recursion
-3. **Selector Buffering**: OutputManager buffers responses until `updatePageSource()` called
-4. **Page Source Updates**: Triggered by `--wait` completion, `--scroll` intervals, or `did-finish-load` (when `--selector` set without `--wait`)
-5. **Exit codes defined in constants.ts**
-6. **RESPONSE_WITHOUT_BODY**: Set([204, 304]) for clean status code handling
+2. **Cookie Management**: ProtocolHandler retrieves cookies from webContents session for requests and stores cookies from `Set-Cookie` responses
+3. **Infinite Recursion Prevention**: `inFlight` Set tracks URLs currently being processed; `net.fetch()` bypasses custom protocol handlers
+4. **Selector Buffering**: OutputManager buffers responses until `updatePageSource()` called
+5. **Page Source Updates**: Triggered by `--wait` completion, `--scroll` intervals, or `did-finish-load` (when `--selector` set without `--wait`)
+6. **Exit codes defined in constants.ts**
+7. **RESPONSE_WITHOUT_BODY**: Set([204, 304]) for clean status code handling
 
 ---
 

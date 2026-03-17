@@ -1,4 +1,12 @@
-import { app, BaseWindow, WebContentsView, nativeTheme, ipcMain, clipboard } from 'electron';
+import {
+  app,
+  BaseWindow,
+  WebContentsView,
+  nativeTheme,
+  ipcMain,
+  clipboard,
+  session,
+} from 'electron';
 import { AutomationManager } from '../shared/automation.ts';
 import { OutputManager } from '../shared/output_manager.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
@@ -143,22 +151,26 @@ function createWindow(cliArgs: CLIArgs): {
   });
 
   // Create ProtocolHandler with callbacks that forward to OutputManager and UI
-  const protocolHandler = new ProtocolHandler(webView?.webContents.getURL() || 'about:blank', {
-    onRequestStarted: (request) => {
-      // Send IPC to renderer for network panel
-      uiView?.webContents.send('network-request-start', request);
+  const protocolHandler = new ProtocolHandler(
+    webView?.webContents.getURL() || 'about:blank',
+    {
+      onRequestStarted: (request) => {
+        // Send IPC to renderer for network panel
+        uiView?.webContents.send('network-request-start', request);
+      },
+      onResponseCompleted: (request, response) => {
+        // Send IPC to renderer for network panel
+        uiView?.webContents.send('network-request-complete', {
+          id: request.id,
+          url: request.url,
+          statusCode: response.statusCode,
+        });
+        // Forward to OutputManager
+        outputManager?.responseCompleted(request, response);
+      },
     },
-    onResponseCompleted: (request, response) => {
-      // Send IPC to renderer for network panel
-      uiView?.webContents.send('network-request-complete', {
-        id: request.id,
-        url: request.url,
-        statusCode: response.statusCode,
-      });
-      // Forward to OutputManager
-      outputManager?.responseCompleted(request, response);
-    },
-  });
+    webView?.webContents.session || session.defaultSession
+  );
 
   protocolHandler.register();
 
