@@ -20,7 +20,7 @@ main.ts (Coordinator) ──┬→ ProtocolHandler (interception only)
 **Window Structure**:
 
 ```
-BaseWindow (1200x800)
+BaseWindow (1200x1000)
 ├─ WebContentsView (left, dynamic) - External URLs
 └─ WebContentsView (right, 500px) - Network Monitor UI
 ```
@@ -87,6 +87,7 @@ BaseWindow (1200x800)
 5. **Page Source Updates**: Triggered by `--wait` completion, `--scroll` intervals, or `did-finish-load` (when `--selector` set without `--wait`)
 6. **Exit codes defined in constants.ts**
 7. **RESPONSE_WITHOUT_BODY**: Set([204, 304]) for clean status code handling
+8. **Source Extraction**: Only `src` and `data-src` attributes are checked (not `srcset`)
 
 ---
 
@@ -106,11 +107,11 @@ BaseWindow (1200x800)
 | `--verbose`         | `-v`      | bool   | Enable verbose logging          |
 | `--flat-dir`        | -         | bool   | Flat output directory           |
 | `--width`           | `-W`      | number | Initial window width            |
-| `--height`          | `-H`      | number | Initial window height           |
+| `--height`           | `-H`      | number | Initial window height           |
 
 **Eligibility Logic**: `--filter` AND `--selector` (both must match if specified)
 
-**Source Extraction Priority**: `src` → `data-src` → `srcset` (parse all URLs)
+**Source Extraction Priority**: `src` → `data-src`
 
 ---
 
@@ -216,10 +217,12 @@ const automationManager = new AutomationManager({
   onScrollRequested: async () => {
     const shouldContinue = await webView?.webContents.executeJavaScript(
       `(() => {
-        const scrollAmount = ${cliArgs.scroll || 100};
-        const scrolled = window.scrollBy(0, scrollAmount);
-        const scrolledDown = window.scrollY >= (document.body.scrollHeight - window.innerHeight);
-        return !scrolledDown;
+        // Check if we're already at the bottom before scrolling
+        const hasReachedBottom = window.scrollY >= (document.body.scrollHeight - window.innerHeight);
+        if (!hasReachedBottom) {
+            const scrolled = window.scrollBy(0, ${cliArgs.scroll});
+        }
+        return !hasReachedBottom;
       })();`
     );
     return shouldContinue ?? false;
@@ -228,7 +231,7 @@ const automationManager = new AutomationManager({
     await updatePageSource();
   },
   onCloseRequested: () => {
-    process.exit(0);
+    process.exit(EXIT_CODES.success);
   },
 });
 automationManager.start();
