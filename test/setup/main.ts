@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi } from 'vitest';
 
 // Mock the electron module for main process tests
 vi.mock('electron', () => ({
@@ -73,4 +73,4 @@ vi.mock('electron', () => ({
   Menu: {
     buildFromTemplate: vi.fn(() => ({})),
   },
-}))
+}));

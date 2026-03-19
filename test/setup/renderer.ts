@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi } from 'vitest';
 
 // Mock ipcRenderer for renderer process tests
 vi.mock('electron', () => ({
@@ -9,12 +9,6 @@ vi.mock('electron', () => ({
     invoke: vi.fn(),
     receive: vi.fn(),
   },
-}))
+}));
 
-// Setup testing-library cleanup
-import { cleanup } from '@testing-library/dom'
-import { afterEach } from 'vitest'
-
-afterEach(() => {
-  cleanup()
-})
+// Vitest handles cleanup automatically between tests
