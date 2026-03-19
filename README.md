@@ -112,7 +112,7 @@ npm run electron:dev
 
 ## Vibe Experience
 
-As I mentioned earlier, one of the motivations for why I created this project is to exercise a **fully local** vibe coding experience. We have come a long way since my [last attempt](https://github.com/initialxy/initialxy-points). So I'd like to make a commentary of my experience. First of all, my setup, I have [Qwen 3.5](https://huggingface.co/collections/Qwen/qwen35) running locally on my RX 7900 XTS using [llama.cpp](https://github.com/ggml-org/llama.cpp) and [opencode](https://opencode.ai/) for code generation. I switched between their Qwen3.5-35B-A3B for speed Qwen3.5-27B for quality depending on scenarios. Here are the exact launch commands that were used.
+As I mentioned earlier, one of the motivations for why I created this project is to exercise a **fully local** vibe coding experience. We have come a long way since my [last attempt](https://github.com/initialxy/initialxy-points). So I'd like to make a commentary of my experience. First of all, my setup, I have [Qwen 3.5](https://huggingface.co/collections/Qwen/qwen35) running locally on my RX 7900 XTX using [llama.cpp](https://github.com/ggml-org/llama.cpp) and [opencode](https://opencode.ai/) for code generation. I switched between their Qwen3.5-35B-A3B for speed Qwen3.5-27B for quality depending on scenarios. Here are the exact launch commands that were used.
 
 ```bash
 ./llama-server -m /home/initialxy/ML/llm/models/Qwen3.5-35B-A3B-IQ4_XS.gguf -a 'qwen' -c 131072 -ngl all -fa on --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0 --cache-ram 131072 --ctx-checkpoints 64
