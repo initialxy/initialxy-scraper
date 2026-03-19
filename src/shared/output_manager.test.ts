@@ -1,6 +1,31 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { OutputManager } from './output_manager.ts';
 
+// Mock fs and path modules to prevent actual file system operations
+vi.mock('node:fs', () => ({
+  default: {
+    existsSync: vi.fn().mockReturnValue(true),
+    mkdirSync: vi.fn(),
+    writeFileSync: vi.fn(),
+  },
+  existsSync: vi.fn().mockReturnValue(true),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
+
+vi.mock('node:path', () => ({
+  default: {
+    join: vi.fn((...paths: string[]) => paths.join('/')),
+    dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/') || '/'),
+    basename: vi.fn((p: string) => p.split('/').pop() || ''),
+    extname: vi.fn((p: string) => (p.split('.').pop() ? '.' + p.split('.').pop() : '')),
+  },
+  join: vi.fn((...paths: string[]) => paths.join('/')),
+  dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/') || '/'),
+  basename: vi.fn((p: string) => p.split('/').pop() || ''),
+  extname: vi.fn((p: string) => (p.split('.').pop() ? '.' + p.split('.').pop() : '')),
+}));
+
 describe('OutputManager', () => {
   let manager: OutputManager;
   let mockOnOutput: ReturnType<typeof vi.fn<(url: string) => void>>;
