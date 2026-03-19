@@ -1,6 +1,6 @@
 # initialxy-scraper - Technical Context
 
-**Version**: 1.0.0
+**Version**: 1.0.2
 **Electron**: 40.6.1 | **Node**: 24.x+ | **TypeScript**: 5.9.3 | **Vite**: 7.3.1
 
 ---
@@ -59,6 +59,41 @@ BaseWindow (1200x1000)
 - **Methods**: `start()` - initializes all timers, `onOutputEvent()` - resets idle timer
 - **NO access** to `webView` or `cliArgs` - delegates via callbacks
 - **onScrollRequested**: Returns `Promise<boolean>` - `true` to continue scrolling, `false` to stop (e.g., at page bottom)
+
+---
+
+## Testing Setup
+
+**Test Framework**: Vitest 4.1.0
+
+**Configuration** (`vitest.config.ts`):
+- **Globals**: `true` (no import needed for test functions)
+- **Environment**: `node`
+- **Include**: `src/**/*.test.ts`
+- **Setup file**: `test/setup/main.ts`
+- **Fake timers**: Enabled by default (fakes `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`)
+- **Aliases**: `@main`, `@shared`, `@renderer`
+
+**Test Coverage** (`src/**/*.test.ts`):
+
+| Test File | Tests | Key Coverage |
+|-----------|-------|--------------|
+| `src/main/main.test.ts` | 9 | Error handling, IPC handlers, window creation, platform-specific behavior, user data directory |
+| `src/shared/protocol.test.ts` | 3 | Constructor, register method, mock callbacks |
+| `src/shared/output_manager.test.ts` | 12 | Constructor, responseCompleted, updatePageSource, filtering, file writing, curl/ffmpeg command generation |
+| `src/shared/automation.test.ts` | 12 | Constructor, start, scroll logic, idle timer, onOutputEvent |
+
+**Test Setup** (`test/setup/main.ts`):
+- Mocks entire Electron API for main process tests
+- Key mocks: `app`, `BrowserWindow`, `ipcMain`, `protocol`, `session`, `screen`
+
+**Test Commands**:
+```bash
+npm run test              # Run all tests
+npm run test:watch        # Watch mode
+npm run test:ui           # Test UI
+npm run test:coverage     # Coverage report
+```
 
 ---
 
@@ -155,6 +190,11 @@ npm start -- --scroll 100 --wait 3 --close-on-idle 10 --output-dir ./all https:/
 
 # Build + launch with logging
 npm run electron:dev
+
+# Run tests
+npm run test
+npm run test:watch
+npm run test:coverage
 ```
 
 ---
