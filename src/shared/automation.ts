@@ -4,7 +4,7 @@ export class AutomationManager {
   private waitS: number;
   private scrollIntervalS: number;
   private closeOnIdleTimeS: number | null;
-  private onScrollRequested: () => Promise<boolean>;
+  private onScrollRequested: () => Promise<void>;
   private onUpdateRequested: () => Promise<void>;
   private onCloseRequested: () => void;
 
@@ -15,7 +15,7 @@ export class AutomationManager {
     waitS: number;
     scrollIntervalS: number;
     closeOnIdleTimeS: number | null;
-    onScrollRequested: () => Promise<boolean>;
+    onScrollRequested: () => Promise<void>;
     onUpdateRequested: () => Promise<void>;
     onCloseRequested: () => void;
   }) {
@@ -43,22 +43,14 @@ export class AutomationManager {
   }
 
   private startScroll(): void {
-    let scrollInterval: NodeJS.Timeout | null = null;
-
-    const scrollLoop = async () => {
-      const shouldContinue = await this.onScrollRequested();
-      if (!shouldContinue) {
-        clearInterval(scrollInterval);
-        return;
-      }
-
-      setTimeout(async () => {
-        await this.onUpdateRequested();
-      }, MILD_DELAY_MS);
-    };
-
     if (this.scrollIntervalS > 0) {
-      scrollInterval = setInterval(scrollLoop, this.scrollIntervalS * MS_IN_S);
+      setInterval(() => {
+        this.onScrollRequested().then(() => {
+          setTimeout(() => {
+            this.onUpdateRequested();
+          }, MILD_DELAY_MS);
+        });
+      }, this.scrollIntervalS * MS_IN_S);
     }
   }
 

@@ -211,17 +211,7 @@ app.whenReady().then(async () => {
       scrollIntervalS: cliArgs.scroll ? 1 : 0,
       closeOnIdleTimeS: cliArgs.closeOnIdle || null,
       onScrollRequested: async () => {
-        const shouldContinue = await webView?.webContents.executeJavaScript(
-          `(() => {
-            // Check if we're already at the bottom before scrolling
-            const hasReachedBottom = window.scrollY >= (document.body.scrollHeight - window.innerHeight);
-            if (!hasReachedBottom) {
-                const scrolled = window.scrollBy(0, ${cliArgs.scroll});
-            }
-            return !hasReachedBottom;
-          })();`
-        );
-        return shouldContinue ?? false;
+        await webView?.webContents.executeJavaScript(`window.scrollBy(0, ${cliArgs.scroll});`);
       },
       onUpdateRequested: async () => {
         await updatePageSource();

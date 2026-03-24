@@ -3,7 +3,7 @@ import { AutomationManager } from './automation.ts';
 
 describe('AutomationManager', () => {
   let manager: AutomationManager;
-  let mockOnScrollRequested: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+  let mockOnScrollRequested: ReturnType<typeof vi.fn<() => Promise<void>>>;
   let mockOnUpdateRequested: ReturnType<typeof vi.fn<() => Promise<void>>>;
   let mockOnCloseRequested: ReturnType<typeof vi.fn<() => void>>;
 
@@ -11,7 +11,7 @@ describe('AutomationManager', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
-    mockOnScrollRequested = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
+    mockOnScrollRequested = vi.fn<() => Promise<void>>(() => Promise.resolve());
     mockOnUpdateRequested = vi.fn<() => Promise<void>>(() => Promise.resolve());
     mockOnCloseRequested = vi.fn<() => void>();
   });
@@ -110,8 +110,6 @@ describe('AutomationManager', () => {
 
   describe('scroll', () => {
     it('should call onScrollRequested at scrollIntervalS intervals', async () => {
-      mockOnScrollRequested.mockResolvedValue(true);
-
       manager = new AutomationManager({
         waitS: 0,
         scrollIntervalS: 1,
@@ -134,9 +132,7 @@ describe('AutomationManager', () => {
       expect(mockOnScrollRequested).toHaveBeenCalled();
     });
 
-    it('should stop scrolling when onScrollRequested returns false', async () => {
-      mockOnScrollRequested.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-
+    it('should continue scrolling continuously', async () => {
       manager = new AutomationManager({
         waitS: 0,
         scrollIntervalS: 1,
@@ -148,16 +144,12 @@ describe('AutomationManager', () => {
 
       manager.start();
 
-      // First scroll
-      vi.advanceTimersByTime(1000);
+      // Advance time to trigger multiple scroll intervals
+      vi.advanceTimersByTime(5000);
       await vi.runOnlyPendingTimersAsync();
 
-      // Second scroll - should stop
-      vi.advanceTimersByTime(1000);
-      await vi.runOnlyPendingTimersAsync();
-
-      // Should have been called twice (true, then false)
-      expect(mockOnScrollRequested).toHaveBeenCalledTimes(2);
+      // Should have been called at least once (continuous scrolling)
+      expect(mockOnScrollRequested).toHaveBeenCalled();
     });
 
     it('should not scroll when scrollIntervalS is 0', async () => {

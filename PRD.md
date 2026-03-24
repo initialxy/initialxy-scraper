@@ -687,7 +687,7 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] Source extraction uses correct priority (src, data-src)
 - [ ] URL normalization converts to absolute paths
 - [ ] Selector re-applies after each scroll (via setTimeout in main.ts)
-- [ ] Scroll stops at page bottom (auto-detects and cancels interval)
+- [ ] Scroll continues continuously (no bottom detection) for lazy-loaded content
 - [ ] --wait defaults to 0, but still queues page source update
 - [ ] Wait, scroll, and close-on-idle automation works
 - [ ] --close-on-idle resets on onOutput callbacks

@@ -58,7 +58,7 @@ BaseWindow (1200x1000)
 - **Constructor params**: `waitS`, `scrollIntervalS`, `closeOnIdleTimeS`, `onScrollRequested`, `onUpdateRequested`, `onCloseRequested`
 - **Methods**: `start()` - initializes all timers, `onOutputEvent()` - resets idle timer
 - **NO access** to `webView` or `cliArgs` - delegates via callbacks
-- **onScrollRequested**: Returns `Promise<boolean>` - `true` to continue scrolling, `false` to stop (e.g., at page bottom)
+- **onScrollRequested**: Returns `Promise<void>` - triggers scroll continuously
 
 ---
 
@@ -255,17 +255,9 @@ const automationManager = new AutomationManager({
   scrollIntervalS: 1,
   closeOnIdleTimeS: cliArgs.closeOnIdle || null,
   onScrollRequested: async () => {
-    const shouldContinue = await webView?.webContents.executeJavaScript(
-      `(() => {
-        // Check if we're already at the bottom before scrolling
-        const hasReachedBottom = window.scrollY >= (document.body.scrollHeight - window.innerHeight);
-        if (!hasReachedBottom) {
-            const scrolled = window.scrollBy(0, ${cliArgs.scroll});
-        }
-        return !hasReachedBottom;
-      })();`
+    await webView?.webContents.executeJavaScript(
+      `window.scrollBy(0, ${cliArgs.scroll});`
     );
-    return shouldContinue ?? false;
   },
   onUpdateRequested: async () => {
     await updatePageSource();
