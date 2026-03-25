@@ -51,6 +51,7 @@ BaseWindow (1200x1000)
 - `updatePageSource()` - updates `sourceUrls` from page source, processes buffered responses
 - Callback: `onOutput(url)` to reset idle timer
 - Callback: `onAllSelectorFilesSaved()` when all selector-matched files are saved
+- `hasPendingSelectorFiles()` - returns true if there are expected selector files that haven't been saved yet
 - Tracks saved URLs in `savedUrls` Set to detect completion
 - **NO** WebContents access
 
@@ -238,8 +239,9 @@ const manager = new OutputManager({
   baseUrl,
   onOutput: (url) => automationManager?.onOutputEvent(),
   onAllSelectorFilesSaved: () => {
-    // All files matching --selector are saved
-    if (cliArgs.closeOnSelectorComplete) {
+    // When --scroll is set, don't close immediately.
+    // Wait for updatePageSource() to be called and check hasPendingSelectorFiles().
+    if (cliArgs.closeOnSelectorComplete && !cliArgs.scroll) {
       process.exit(EXIT_CODES.success);
     }
   },
@@ -272,7 +274,13 @@ const automationManager = new AutomationManager({
     await updatePageSource();
   },
   onCloseRequested: () => {
-    process.exit(EXIT_CODES.success);
+    // When --close-on-selector-complete is set, check hasPendingSelectorFiles()
+    // to determine exit code. Otherwise always use closeOnIdleTimeout.
+    if (cliArgs.closeOnSelectorComplete && outputManager && !outputManager.hasPendingSelectorFiles()) {
+      process.exit(EXIT_CODES.success);
+    } else {
+      process.exit(EXIT_CODES.closeOnIdleTimeout);
+    }
   },
 });
 automationManager.start();

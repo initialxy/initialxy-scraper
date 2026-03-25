@@ -454,4 +454,105 @@ describe('OutputManager', () => {
       expect(mockOnOutput).toHaveBeenCalledWith('https://example.com/img.jpg');
     });
   });
+
+  describe('hasPendingSelectorFiles', () => {
+    it('should return true when there are unsaved selector files', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+      });
+
+      // Update page source to set up sourceUrls with 2 images
+      const pageSource = `
+        <img src="https://example.com/img1.jpg">
+        <img src="https://example.com/img2.jpg">
+      `;
+      manager.updatePageSource(pageSource);
+
+      // Both files are pending (not yet saved)
+      expect(manager.hasPendingSelectorFiles()).toBe(true);
+
+      // Save one file
+      manager.responseCompleted(
+        { url: 'https://example.com/img1.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test1'), headers: {} }
+      );
+
+      // Still has pending files
+      expect(manager.hasPendingSelectorFiles()).toBe(true);
+
+      // Save second file
+      manager.responseCompleted(
+        { url: 'https://example.com/img2.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test2'), headers: {} }
+      );
+
+      // No pending files now
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+    });
+
+    it('should return false when selector is not set', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+      });
+
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+    });
+
+    it('should return false when no source URLs exist', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+      });
+
+      // No page source update yet
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+
+      // Empty page source
+      manager.updatePageSource('<div>No images</div>');
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+    });
+
+    it('should return false when all files are already saved initially', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+      });
+
+      // Update page source
+      const pageSource = '<img src="https://example.com/img.jpg">';
+      manager.updatePageSource(pageSource);
+
+      // Immediately save the file
+      manager.responseCompleted(
+        { url: 'https://example.com/img.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test'), headers: {} }
+      );
+
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+    });
+
+    it('should return false when no selector is configured', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+      });
+
+      manager.responseCompleted(
+        { url: 'https://example.com/test.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test'), headers: {} }
+      );
+
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+    });
+  });
 });

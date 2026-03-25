@@ -161,6 +161,7 @@ When `--selector` specified, extract URLs using priority:
 **Close triggers** (evaluated in order after idle timer starts):
 
 1. If `--close-on-selector-complete` or `--selector` with `--close-on-idle`: Close when all source URLs have completed (exit code 0)
+   - **Special case with `--scroll`**: When both `--close-on-selector-complete` and `--scroll` are set, the app does NOT close immediately when all known selector files are saved. Instead, it waits for `updatePageSource()` to be called (triggered by scrolling or other events) and then checks if there are any new pending selector files. This ensures lazy-loaded content has time to be discovered and downloaded before closing.
 2. Else: Close when idle timer expires (exit code 3)
 
 Timer is independent of `--scroll` and does NOT reset on new discoveries.

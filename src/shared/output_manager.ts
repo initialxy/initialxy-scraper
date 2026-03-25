@@ -197,10 +197,20 @@ export class OutputManager {
       return;
     }
 
-    const isSaveComplete = [...this.sourceUrls.keys()].every((url) => this.savedUrls.has(url));
-
-    if (isSaveComplete && this.onAllSelectorFilesSaved) {
+    if (!this.hasPendingSelectorFiles() && this.onAllSelectorFilesSaved) {
       this.onAllSelectorFilesSaved();
     }
+  }
+
+  /**
+   * Check if there are still expected pending files that haven't been received yet.
+   * Returns true if there are source URLs that haven't been saved yet.
+   */
+  hasPendingSelectorFiles(): boolean {
+    if (!this.selector || this.sourceUrls.size === 0) {
+      return false;
+    }
+
+    return [...this.sourceUrls.keys()].some((url) => !this.savedUrls.has(url));
   }
 }

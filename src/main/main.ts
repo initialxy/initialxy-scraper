@@ -20,7 +20,6 @@ let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
 let outputManager: OutputManager | null = null;
 let automationManager: AutomationManager | null = null;
-let selectorCompletionTriggered = false;
 
 function createWindow(cliArgs: CLIArgs): {
   win: BaseWindow;
@@ -150,8 +149,9 @@ function createWindow(cliArgs: CLIArgs): {
       automationManager?.onOutputEvent();
     },
     onAllSelectorFilesSaved: () => {
-      selectorCompletionTriggered = true;
-      if (cliArgs.closeOnSelectorComplete) {
+      // When scrolling is enabled, don't close immediately.
+      // Wait for updatePageSource() to be called and then check for pending files.
+      if (cliArgs.closeOnSelectorComplete && !cliArgs.scroll) {
         process.exit(EXIT_CODES.success);
       }
     },
@@ -230,7 +230,11 @@ app.whenReady().then(async () => {
         await updatePageSource();
       },
       onCloseRequested: () => {
-        if (selectorCompletionTriggered) {
+        if (
+          cliArgs.closeOnSelectorComplete &&
+          outputManager &&
+          !outputManager.hasPendingSelectorFiles()
+        ) {
           process.exit(EXIT_CODES.success);
         } else {
           process.exit(EXIT_CODES.closeOnIdleTimeout);

@@ -238,17 +238,30 @@ describe('main.ts utilities', () => {
     });
   });
 
-  describe('exit code logic', () => {
-    it('should exit with code 0 when selector completion is triggered', () => {
-      const selectorCompletionTriggered = true;
-      const expectedExitCode = selectorCompletionTriggered ? 0 : 3;
+  describe('exit code logic with hasPendingSelectorFiles', () => {
+    it('should exit with code 0 when selector completion is triggered and no pending files', () => {
+      // Simulate the new logic using hasPendingSelectorFiles()
+      const hasPendingSelectorFiles = false;
+      const closeOnSelectorComplete = true;
+      const expectedExitCode = closeOnSelectorComplete && !hasPendingSelectorFiles ? 0 : 3;
 
       expect(expectedExitCode).toBe(0);
     });
 
-    it('should exit with code 3 when idle timeout occurs before selector completion', () => {
-      const selectorCompletionTriggered = false;
-      const expectedExitCode = selectorCompletionTriggered ? 0 : 3;
+    it('should exit with code 3 when idle timeout occurs with pending selector files', () => {
+      // Simulate the new logic using hasPendingSelectorFiles()
+      const hasPendingSelectorFiles = true;
+      const closeOnSelectorComplete = true;
+      const expectedExitCode = closeOnSelectorComplete && !hasPendingSelectorFiles ? 0 : 3;
+
+      expect(expectedExitCode).toBe(3);
+    });
+
+    it('should exit with code 3 when --close-on-selector-complete is not set', () => {
+      // When --close-on-selector-complete is not set, always exit with idle timeout code
+      const hasPendingSelectorFiles = false;
+      const closeOnSelectorComplete = false;
+      const expectedExitCode = closeOnSelectorComplete && !hasPendingSelectorFiles ? 0 : 3;
 
       expect(expectedExitCode).toBe(3);
     });
@@ -256,12 +269,14 @@ describe('main.ts utilities', () => {
     it('should handle exit code determination pattern', () => {
       // Pattern used in main.ts onCloseRequested handler
       const testCases = [
-        { triggered: true, expected: 0 },
-        { triggered: false, expected: 3 },
+        { closeOnSelectorComplete: true, hasPendingFiles: false, expected: 0 },
+        { closeOnSelectorComplete: true, hasPendingFiles: true, expected: 3 },
+        { closeOnSelectorComplete: false, hasPendingFiles: false, expected: 3 },
+        { closeOnSelectorComplete: false, hasPendingFiles: true, expected: 3 },
       ];
 
-      for (const { triggered, expected } of testCases) {
-        const exitCode = triggered ? 0 : 3;
+      for (const { closeOnSelectorComplete, hasPendingFiles, expected } of testCases) {
+        const exitCode = closeOnSelectorComplete && !hasPendingFiles ? 0 : 3;
         expect(exitCode).toBe(expected);
       }
     });
