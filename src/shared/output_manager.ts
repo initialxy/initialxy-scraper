@@ -33,6 +33,7 @@ export class OutputManager {
   private flatDir?: boolean;
   private onOutput: (url: string) => void;
   private unprocessedResponses: ResponseData[] = [];
+  private sourceUrls: Map<string, number> = new Map<string, number>();
   private sequentialCounter = 0;
   private baseUrl: string;
 
@@ -61,23 +62,20 @@ export class OutputManager {
   ): void {
     const responseData: ResponseData = { request, response };
 
-    if (this.selector) {
+    if (!this.processResponse(responseData, this.sourceUrls) && this.selector) {
       this.unprocessedResponses.push(responseData);
-      return;
     }
-
-    this.processResponse(responseData, new Map<string, number>());
   }
 
   updatePageSource(pageSource: string): void {
+    this.sourceUrls = this.extractSourceUrlsFromSource(pageSource);
+
     if (this.unprocessedResponses.length === 0) {
       return;
     }
 
-    const sourceUrls = this.extractSourceUrlsFromSource(pageSource);
-
     this.unprocessedResponses.forEach((responseData) => {
-      this.processResponse(responseData, sourceUrls);
+      this.processResponse(responseData, this.sourceUrls);
     });
 
     this.unprocessedResponses = [];
@@ -117,10 +115,10 @@ export class OutputManager {
     return filterMatch && selectorMatch;
   }
 
-  private processResponse(responseData: ResponseData, sourceUrls: Map<string, number>): void {
+  private processResponse(responseData: ResponseData, sourceUrls: Map<string, number>): boolean {
     const normalizedUrl = normalizeUrlWithBase(this.baseUrl, responseData.request.url);
     if (!this.isEligible(normalizedUrl, sourceUrls)) {
-      return;
+      return false;
     }
 
     const { request, response } = responseData;
@@ -137,6 +135,7 @@ export class OutputManager {
     }
 
     this.onOutput(request.url);
+    return true;
   }
 
   private generateOutputCommand(request: {

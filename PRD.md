@@ -137,10 +137,11 @@ When `--selector` specified, extract URLs using priority:
 5. Wait for page load complete
 6. If `--wait > 0`: Wait specified seconds (allows dynamic JS elements to load)
 7. Queue page source update to end of event loop: `setTimeout(() => main.updatePageSource(), 0)`
-8. If `--selector`: OutputManager buffers responses in unprocessedResponses
+8. If `--selector`: OutputManager tracks source URLs from page source
    - main.ts calls outputManager.updatePageSource(pageSource)
-   - OutputManager extracts source URLs from DOM, normalizes, filters unprocessedResponses
-   - OutputManager processes buffered responses immediately
+   - OutputManager extracts source URLs from DOM, normalizes, updates internal sourceUrls map
+   - Buffered responses (unprocessedResponses) are filtered against new sourceUrls
+   - Responses matching sourceUrls are processed immediately; non-matching stay buffered
 9. If `--scroll`: After `--wait` period, scroll webview every second
    - After each scroll, queue page source update: `setTimeout(() => main.updatePageSource(), 100)`
 10. If `--close-on-idle`: Start idle timer after `--wait` period
@@ -148,7 +149,7 @@ When `--selector` specified, extract URLs using priority:
     - If `--selector` also specified: Close when all source URLs completed (tracked via onOutput callbacks)
 11. Output responses:
     - Without `--selector`: Output immediately when response completes (filtered by --filter if present)
-    - With `--selector`: Output after page source is delivered and filtered
+    - With `--selector`: Output immediately if URL matches current sourceUrls, otherwise buffer until page source update
 
 #### Close Behavior
 
@@ -249,7 +250,7 @@ Main Process (main.ts) - Central Coordinator
 │
 ├── Output Manager (output_manager.ts)
 │   ├── Filters responses based on --filter, --selector, --output-dir, --output-curl
-│   ├── Buffers responses when --selector is active
+│   ├── Processes immediately if URL matches current sourceUrls, otherwise buffers
 │   ├── Processes page source via main.ts.updatePageSource()
 │   └── Outputs to file/console via callbacks to main.ts
 │
@@ -293,9 +294,11 @@ Main Process (main.ts) - Central Coordinator
 **output_manager.ts** (Output Logic Abstraction):
 
 - Receives CLI args: filter, selector, outputDir, outputCurl, renameSequence, flatDir
-- Maintains unprocessedResponses buffer when --selector is active
+- Maintains unprocessedResponses buffer for responses not matching current sourceUrls
+- Maintains sourceUrls map (persists across responseCompleted calls)
 - Receives page source via updatePageSource(pageSource) from main.ts
-- Extracts source URLs from HTML using jsdom (src, data-src priority)
+- Updates sourceUrls from HTML using jsdom (src, data-src priority)
+- Processes buffered responses against new sourceUrls
 - Normalizes URLs to absolute paths
 - Outputs to file (output-dir) or console (output-curl)
 - Callback to main.ts: `onOutput(url)` when response is output

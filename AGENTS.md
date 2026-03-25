@@ -47,8 +47,8 @@ BaseWindow (1200x1000)
 ### OutputManager (`src/shared/output_manager.ts`)
 
 - Filtering, buffering, file/console output
-- `responseCompleted()` - buffers when `--selector` active
-- `updatePageSource()` - processes buffered responses
+- `responseCompleted()` - processes immediately if URL matches current `sourceUrls`, otherwise buffers
+- `updatePageSource()` - updates `sourceUrls` from page source, processes buffered responses
 - Callback: `onOutput(url)` to reset idle timer
 - **NO** WebContents access
 
@@ -78,9 +78,9 @@ BaseWindow (1200x1000)
 
 | Test File | Tests | Key Coverage |
 |-----------|-------|--------------|
-| `src/main/main.test.ts` | 9 | Error handling, IPC handlers, window creation, platform-specific behavior, user data directory |
-| `src/shared/protocol.test.ts` | 3 | Constructor, register method, mock callbacks |
-| `src/shared/output_manager.test.ts` | 12 | Constructor, responseCompleted, updatePageSource, filtering, file writing, curl/ffmpeg command generation |
+| `src/main/main.test.ts` | 10 | Error handling, IPC handlers, window creation, platform-specific behavior, user data directory |
+| `src/shared/protocol.test.ts` | 2 | Constructor, register method, mock callbacks |
+| `src/shared/output_manager.test.ts` | 16 | Constructor, responseCompleted (immediate processing + buffering), updatePageSource, filtering, file writing, curl/ffmpeg command generation |
 | `src/shared/automation.test.ts` | 12 | Constructor, start, scroll logic, idle timer, onOutputEvent |
 
 **Test Setup** (`test/setup/main.ts`):

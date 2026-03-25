@@ -96,6 +96,29 @@ describe('OutputManager', () => {
       expect(output).toContain('https://example.com/test.jpg');
     });
 
+    it('should process response immediately when selector matches current sourceUrls', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputCurl: true,
+        onOutput: mockOnOutput,
+      });
+
+      // First update page source to set up sourceUrls
+      const pageSource = '<img src="https://example.com/existing.jpg">';
+      manager.updatePageSource(pageSource);
+
+      // Now a response comes in that matches the current sourceUrls
+      manager.responseCompleted(
+        { url: 'https://example.com/existing.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test'), headers: {} }
+      );
+
+      // Should be processed immediately (not buffered)
+      expect(mockOnOutput).toHaveBeenCalledWith('https://example.com/existing.jpg');
+      expect(mockStdoutWrite).toHaveBeenCalled();
+    });
+
     it('should buffer response when selector is set', () => {
       manager = new OutputManager({
         baseUrl: 'https://example.com',
