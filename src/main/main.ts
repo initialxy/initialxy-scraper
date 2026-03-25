@@ -228,17 +228,16 @@ app.whenReady().then(async () => {
       },
       onUpdateRequested: async () => {
         await updatePageSource();
+        if (cliArgs.closeOnSelectorComplete && !outputManager?.hasPendingSelectorFiles()) {
+          process.exit(EXIT_CODES.success);
+        }
       },
       onCloseRequested: () => {
-        if (
-          cliArgs.closeOnSelectorComplete &&
-          outputManager &&
-          !outputManager.hasPendingSelectorFiles()
-        ) {
-          process.exit(EXIT_CODES.success);
-        } else {
-          process.exit(EXIT_CODES.closeOnIdleTimeout);
-        }
+        process.exit(
+          !cliArgs.closeOnSelectorComplete || !outputManager?.hasPendingSelectorFiles()
+            ? EXIT_CODES.success
+            : EXIT_CODES.closeOnIdleTimeout
+        );
       },
     });
     automationManager.start();
