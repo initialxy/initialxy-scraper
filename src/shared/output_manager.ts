@@ -32,8 +32,10 @@ export class OutputManager {
   private outputCurl?: boolean;
   private flatDir?: boolean;
   private onOutput: (url: string) => void;
+  private onAllSelectorFilesSaved?: () => void;
   private unprocessedResponses: ResponseData[] = [];
   private sourceUrls: Map<string, number> = new Map<string, number>();
+  private savedUrls: Set<string> = new Set<string>();
   private sequentialCounter = 0;
   private baseUrl: string;
 
@@ -45,6 +47,7 @@ export class OutputManager {
     this.outputCurl = options.outputCurl;
     this.flatDir = options.flatDir;
     this.onOutput = options.onOutput;
+    this.onAllSelectorFilesSaved = options.onAllSelectorFilesSaved;
     this.baseUrl = options.baseUrl;
   }
 
@@ -62,7 +65,7 @@ export class OutputManager {
   ): void {
     const responseData: ResponseData = { request, response };
 
-    if (!this.processResponse(responseData, this.sourceUrls) && this.selector) {
+    if (!this.processResponse(responseData) && this.selector) {
       this.unprocessedResponses.push(responseData);
     }
   }
@@ -75,7 +78,7 @@ export class OutputManager {
     }
 
     this.unprocessedResponses.forEach((responseData) => {
-      this.processResponse(responseData, this.sourceUrls);
+      this.processResponse(responseData);
     });
 
     this.unprocessedResponses = [];
@@ -115,9 +118,9 @@ export class OutputManager {
     return filterMatch && selectorMatch;
   }
 
-  private processResponse(responseData: ResponseData, sourceUrls: Map<string, number>): boolean {
+  private processResponse(responseData: ResponseData): boolean {
     const normalizedUrl = normalizeUrlWithBase(this.baseUrl, responseData.request.url);
-    if (!this.isEligible(normalizedUrl, sourceUrls)) {
+    if (!this.isEligible(normalizedUrl, this.sourceUrls)) {
       return false;
     }
 
@@ -131,7 +134,7 @@ export class OutputManager {
     }
 
     if (this.outputDir) {
-      this.writeToFile(response, normalizedUrl, sourceUrls);
+      this.writeToFile(response, normalizedUrl);
     }
 
     this.onOutput(request.url);
@@ -155,15 +158,14 @@ export class OutputManager {
       body: Buffer;
       headers: Record<string, string>;
     },
-    normalizedUrl: string,
-    sourceUrls: Map<string, number>
+    normalizedUrl: string
   ): void {
     try {
       if (RESPONSE_WITHOUT_BODY.has(response.statusCode)) {
         return;
       }
 
-      const sequence = sourceUrls.get(normalizedUrl) ?? this.sequentialCounter;
+      const sequence = this.sourceUrls.get(normalizedUrl) ?? this.sequentialCounter;
       this.sequentialCounter++;
 
       const filename = this.generateFilenameForUrl(normalizedUrl, sequence);
@@ -175,6 +177,8 @@ export class OutputManager {
       }
 
       fs.writeFileSync(filepath, response.body);
+      this.savedUrls.add(normalizedUrl);
+      this.checkAllFilesSaved();
     } catch (error) {
       console.error(`[OutputManager] Error writing file:`, error);
       process.exit(EXIT_CODES.fileWriteFailure);
@@ -186,5 +190,17 @@ export class OutputManager {
       return generateSequentialFilename(url, sequence, this.renameSequence);
     }
     return this.flatDir ? normalizeFlatFilename(url) : normalizeFilename(url);
+  }
+
+  private checkAllFilesSaved(): void {
+    if (!this.selector || this.sourceUrls.size === 0) {
+      return;
+    }
+
+    const isSaveComplete = [...this.sourceUrls.keys()].every((url) => this.savedUrls.has(url));
+
+    if (isSaveComplete && this.onAllSelectorFilesSaved) {
+      this.onAllSelectorFilesSaved();
+    }
   }
 }

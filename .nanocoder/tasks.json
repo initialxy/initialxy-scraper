@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "553ea1f6",
+    "title": "Add onAllSelectorFilesSaved callback to OutputManagerOptions in types.ts",
+    "description": "Add optional callback to track when all selector files are saved",
+    "status": "completed",
+    "createdAt": "2026-03-25T06:33:38.409Z",
+    "updatedAt": "2026-03-25T06:33:54.413Z",
+    "completedAt": "2026-03-25T06:33:54.413Z"
+  },
+  {
+    "id": "4d0bc429",
+    "title": "Implement savedUrls Set tracking in OutputManager",
+    "description": "Add savedUrls Set and check for completion in processResponse()",
+    "status": "completed",
+    "createdAt": "2026-03-25T06:33:38.409Z",
+    "updatedAt": "2026-03-25T06:35:31.934Z",
+    "completedAt": "2026-03-25T06:35:31.934Z"
+  },
+  {
+    "id": "7ee3a636",
+    "title": "Add closeOnSelectorComplete CLI argument and validation in main.ts",
+    "description": "Add CLI arg, validate selector requirement, and handle completion event",
+    "status": "completed",
+    "createdAt": "2026-03-25T06:33:38.409Z",
+    "updatedAt": "2026-03-25T06:41:07.628Z",
+    "completedAt": "2026-03-25T06:41:07.628Z"
+  },
+  {
+    "id": "d62ced97",
+    "title": "Update exit code logic to differentiate success vs idle timeout",
+    "description": "Use selectorCompletionTriggered flag to determine exit code 0 or 3",
+    "status": "completed",
+    "createdAt": "2026-03-25T06:33:38.409Z",
+    "updatedAt": "2026-03-25T06:41:07.628Z",
+    "completedAt": "2026-03-25T06:41:07.628Z"
+  }
+]

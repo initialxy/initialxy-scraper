@@ -29,6 +29,7 @@ vi.mock('node:path', () => ({
 describe('OutputManager', () => {
   let manager: OutputManager;
   let mockOnOutput: ReturnType<typeof vi.fn<(url: string) => void>>;
+  let mockOnAllSelectorFilesSaved: ReturnType<typeof vi.fn<() => void>>;
   let mockStdoutWrite: ReturnType<typeof vi.spyOn>;
 
   beforeAll(() => {
@@ -39,6 +40,7 @@ describe('OutputManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockOnOutput = vi.fn<(url: string) => void>();
+    mockOnAllSelectorFilesSaved = vi.fn<() => void>();
   });
 
   afterAll(() => {
@@ -358,6 +360,98 @@ describe('OutputManager', () => {
       const output = mockStdoutWrite.mock.calls.map((call) => call[0]).join('');
       expect(output).toContain('ffmpeg');
       expect(output).toContain('https://example.com/stream.m3u8');
+    });
+  });
+
+  describe('onAllSelectorFilesSaved', () => {
+    it('should call callback when all selector files are saved', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+        onAllSelectorFilesSaved: mockOnAllSelectorFilesSaved,
+      });
+
+      // Update page source to set up sourceUrls with 2 images
+      const pageSource = `
+        <img src="https://example.com/img1.jpg">
+        <img src="https://example.com/img2.jpg">
+      `;
+      manager.updatePageSource(pageSource);
+
+      // Save first image
+      manager.responseCompleted(
+        { url: 'https://example.com/img1.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test1'), headers: {} }
+      );
+
+      // Callback should NOT be called yet
+      expect(mockOnAllSelectorFilesSaved).not.toHaveBeenCalled();
+
+      // Save second image
+      manager.responseCompleted(
+        { url: 'https://example.com/img2.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test2'), headers: {} }
+      );
+
+      // Callback should now be called
+      expect(mockOnAllSelectorFilesSaved).toHaveBeenCalled();
+    });
+
+    it('should not call callback if selector is not set', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+        onAllSelectorFilesSaved: mockOnAllSelectorFilesSaved,
+      });
+
+      manager.responseCompleted(
+        { url: 'https://example.com/test.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test'), headers: {} }
+      );
+
+      // Callback should never be called without selector
+      expect(mockOnAllSelectorFilesSaved).not.toHaveBeenCalled();
+    });
+
+    it('should not call callback when no files match selector', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+        onAllSelectorFilesSaved: mockOnAllSelectorFilesSaved,
+      });
+
+      // Update page source with no matching images
+      const pageSource = '<div>No images here</div>';
+      manager.updatePageSource(pageSource);
+
+      // Callback should not be called (sourceUrls is empty)
+      expect(mockOnAllSelectorFilesSaved).not.toHaveBeenCalled();
+    });
+
+    it('should not call callback if onAllSelectorFilesSaved is not provided', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+        // No onAllSelectorFilesSaved callback
+      });
+
+      const pageSource = '<img src="https://example.com/img.jpg">';
+      manager.updatePageSource(pageSource);
+
+      manager.responseCompleted(
+        { url: 'https://example.com/img.jpg', method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from('test'), headers: {} }
+      );
+
+      // Should not throw or call undefined callback
+      expect(mockOnOutput).toHaveBeenCalledWith('https://example.com/img.jpg');
     });
   });
 });

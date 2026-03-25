@@ -80,6 +80,7 @@ npm start -- --verbose --output-dir ./debug https://initialxy.com
 | `--wait`            | `-w`      | number | Wait time in seconds after page load before starting idle timer (if --close-on-idle is set) |
 | `--scroll`          | `-r`      | number | Pixels to scroll down every second                                                          |
 | `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
+| `--close-on-selector-complete` | - | bool | Close app with exit code 0 when all files matching --selector are saved |
 | `--rename-sequence` | -         | string | Number of digits for zero-padding (e.g., `4` for `0001`, `05` for `00001`)                  |
 | `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
 | `--flat-dir`        | -         | bool   | Flat output directory (no subdirectories)                                                   |
@@ -90,9 +91,10 @@ npm start -- --verbose --output-dir ./debug https://initialxy.com
 
 | Code | Meaning                        |
 | ---- | ------------------------------ |
-| 0    | Success                        |
-| 1    | Invalid command line arguments |
+| 0    | Success (all files saved or manual close) |
+| 1    | Invalid command line arguments (e.g., `--close-on-selector-complete` without `--selector`) |
 | 2    | File write failure             |
+| 3    | Close on idle timeout (before all selector files were saved) |
 
 ## Development
 

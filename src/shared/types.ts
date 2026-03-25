@@ -8,6 +8,7 @@ export interface CLIArgs {
   wait?: number;
   scroll?: number;
   closeOnIdle?: number;
+  closeOnSelectorComplete?: boolean;
   renameSequence?: string;
   verbose?: boolean;
   outputCurl?: boolean;
@@ -54,4 +55,5 @@ export interface OutputManagerOptions {
   outputCurl?: boolean;
   flatDir?: boolean;
   onOutput: (url: string) => void;
+  onAllSelectorFilesSaved?: () => void;
 }

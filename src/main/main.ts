@@ -20,6 +20,7 @@ let webView: WebContentsView | null | undefined = null;
 let uiView: WebContentsView | null | undefined = null;
 let outputManager: OutputManager | null = null;
 let automationManager: AutomationManager | null = null;
+let selectorCompletionTriggered = false;
 
 function createWindow(cliArgs: CLIArgs): {
   win: BaseWindow;
@@ -148,6 +149,12 @@ function createWindow(cliArgs: CLIArgs): {
       // Reset idle timer when output happens
       automationManager?.onOutputEvent();
     },
+    onAllSelectorFilesSaved: () => {
+      selectorCompletionTriggered = true;
+      if (cliArgs.closeOnSelectorComplete) {
+        process.exit(EXIT_CODES.success);
+      }
+    },
   });
 
   // Create ProtocolHandler with callbacks that forward to OutputManager and UI
@@ -194,6 +201,12 @@ app.whenReady().then(async () => {
   // Sanitize this app's own name from user agent.
   app.userAgentFallback = app.userAgentFallback.replace(app.getName(), '');
 
+  // Validate --close-on-selector-complete requires --selector
+  if (cliArgs.closeOnSelectorComplete && !cliArgs.selector) {
+    console.error('[App] --close-on-selector-complete requires --selector');
+    process.exit(EXIT_CODES.invalidCommandLineArgs);
+  }
+
   const { win, cliArgs: returnedCliArgs } = createWindow(cliArgs);
 
   // Navigate to target URL after protocol handler is registered and make sure
@@ -217,7 +230,11 @@ app.whenReady().then(async () => {
         await updatePageSource();
       },
       onCloseRequested: () => {
-        process.exit(EXIT_CODES.success);
+        if (selectorCompletionTriggered) {
+          process.exit(EXIT_CODES.success);
+        } else {
+          process.exit(EXIT_CODES.closeOnIdleTimeout);
+        }
       },
     });
     automationManager.start();

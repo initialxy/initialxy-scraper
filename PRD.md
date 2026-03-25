@@ -104,6 +104,7 @@ Command-line arguments for automated web scraping. Browser remains visible (not 
 | `--wait`            | `-w`      | number | Wait time in seconds after page load before starting idle timer (if --close-on-idle is set) |
 | `--scroll`          | `-r`      | number | Pixels to scroll down every second                                                          |
 | `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
+| `--close-on-selector-complete` | - | bool | Close app with exit code 0 when all files matching --selector are saved |
 | `--rename-sequence` | -         | string | Number of digits for padding.                                                               |
 | `--verbose`         | `-v`      | bool   | Enable verbose network traffic logging                                                      |
 | `--flat-dir`        | -         | bool   | Flat output directory (no subdirectories)                                                   |
@@ -159,8 +160,8 @@ When `--selector` specified, extract URLs using priority:
 
 **Close triggers** (evaluated in order after idle timer starts):
 
-1. If `--selector`: Close when all source URLs have completed
-2. Else: Close when idle timer expires
+1. If `--close-on-selector-complete` or `--selector` with `--close-on-idle`: Close when all source URLs have completed (exit code 0)
+2. Else: Close when idle timer expires (exit code 3)
 
 Timer is independent of `--scroll` and does NOT reset on new discoveries.
 
@@ -168,9 +169,10 @@ Timer is independent of `--scroll` and does NOT reset on new discoveries.
 
 | Code | Meaning                        |
 | ---- | ------------------------------ |
-| 0    | Success                        |
-| 1    | Invalid command line arguments |
+| 0    | Success (all files saved or manual close) |
+| 1    | Invalid command line arguments (e.g., `--close-on-selector-complete` without `--selector`) |
 | 2    | File write failure             |
+| 3    | Close on idle timeout (before all selector files were saved) |
 
 #### Examples
 

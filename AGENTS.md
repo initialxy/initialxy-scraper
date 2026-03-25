@@ -1,6 +1,6 @@
 # initialxy-scraper - Technical Context
 
-**Version**: 1.0.2
+**Version**: 1.0.3
 **Electron**: 40.6.1 | **Node**: 24.x+ | **TypeScript**: 5.9.3 | **Vite**: 7.3.1
 
 ---
@@ -50,6 +50,8 @@ BaseWindow (1200x1000)
 - `responseCompleted()` - processes immediately if URL matches current `sourceUrls`, otherwise buffers
 - `updatePageSource()` - updates `sourceUrls` from page source, processes buffered responses
 - Callback: `onOutput(url)` to reset idle timer
+- Callback: `onAllSelectorFilesSaved()` when all selector-matched files are saved
+- Tracks saved URLs in `savedUrls` Set to detect completion
 - **NO** WebContents access
 
 ### AutomationManager (`src/shared/automation.ts`)
@@ -80,7 +82,7 @@ BaseWindow (1200x1000)
 |-----------|-------|--------------|
 | `src/main/main.test.ts` | 10 | Error handling, IPC handlers, window creation, platform-specific behavior, user data directory |
 | `src/shared/protocol.test.ts` | 2 | Constructor, register method, mock callbacks |
-| `src/shared/output_manager.test.ts` | 16 | Constructor, responseCompleted (immediate processing + buffering), updatePageSource, filtering, file writing, curl/ffmpeg command generation |
+| `src/shared/output_manager.test.ts` | 20 | Constructor, responseCompleted (immediate processing + buffering), updatePageSource, filtering, file writing, curl/ffmpeg command generation, onAllSelectorFilesSaved callback |
 | `src/shared/automation.test.ts` | 12 | Constructor, start, scroll logic, idle timer, onOutputEvent |
 
 **Test Setup** (`test/setup/main.ts`):
@@ -138,6 +140,7 @@ npm run test:coverage     # Coverage report
 | `--wait`            | `-w`      | number | Wait seconds before idle timer  |
 | `--scroll`          | `-r`      | number | Pixels to scroll per second     |
 | `--close-on-idle`   | `-c`      | number | Seconds idle before close       |
+| `--close-on-selector-complete` | - | bool | Close with exit code 0 when all selector files are saved |
 | `--rename-sequence` | -         | string | Sprintf format (e.g., `05d`)    |
 | `--verbose`         | `-v`      | bool   | Enable verbose logging          |
 | `--flat-dir`        | -         | bool   | Flat output directory           |
@@ -234,6 +237,12 @@ const manager = new OutputManager({
   flatDir,
   baseUrl,
   onOutput: (url) => automationManager?.onOutputEvent(),
+  onAllSelectorFilesSaved: () => {
+    // All files matching --selector are saved
+    if (cliArgs.closeOnSelectorComplete) {
+      process.exit(EXIT_CODES.success);
+    }
+  },
 });
 ```
 

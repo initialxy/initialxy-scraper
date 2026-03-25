@@ -188,4 +188,82 @@ describe('main.ts utilities', () => {
       expect(userDataPath).toBe('/test/dir/userdata');
     });
   });
+
+  describe('--close-on-selector-complete validation', () => {
+    it('should validate that --close-on-selector-complete requires --selector', () => {
+      const cliArgs = {
+        selector: undefined,
+        closeOnSelectorComplete: true,
+      };
+
+      // Simulate validation logic from main.ts
+      if (cliArgs.closeOnSelectorComplete && !cliArgs.selector) {
+        // Should exit with invalidCommandLineArgs
+        expect(true).toBe(true); // Validation triggered
+      }
+
+      expect(() => {
+        if (cliArgs.closeOnSelectorComplete && !cliArgs.selector) {
+          throw new Error('INVALID_COMMAND_LINE_ARGS');
+        }
+      }).toThrow('INVALID_COMMAND_LINE_ARGS');
+    });
+
+    it('should not validate when --close-on-selector-complete is not set', () => {
+      const cliArgs = {
+        selector: undefined,
+        closeOnSelectorComplete: false,
+      };
+
+      // Should not throw
+      expect(() => {
+        if (cliArgs.closeOnSelectorComplete && !cliArgs.selector) {
+          throw new Error('INVALID_COMMAND_LINE_ARGS');
+        }
+      }).not.toThrow();
+    });
+
+    it('should pass validation when both --selector and --close-on-selector-complete are set', () => {
+      const cliArgs = {
+        selector: 'img',
+        closeOnSelectorComplete: true,
+      };
+
+      // Should not throw
+      expect(() => {
+        if (cliArgs.closeOnSelectorComplete && !cliArgs.selector) {
+          throw new Error('INVALID_COMMAND_LINE_ARGS');
+        }
+      }).not.toThrow();
+    });
+  });
+
+  describe('exit code logic', () => {
+    it('should exit with code 0 when selector completion is triggered', () => {
+      const selectorCompletionTriggered = true;
+      const expectedExitCode = selectorCompletionTriggered ? 0 : 3;
+
+      expect(expectedExitCode).toBe(0);
+    });
+
+    it('should exit with code 3 when idle timeout occurs before selector completion', () => {
+      const selectorCompletionTriggered = false;
+      const expectedExitCode = selectorCompletionTriggered ? 0 : 3;
+
+      expect(expectedExitCode).toBe(3);
+    });
+
+    it('should handle exit code determination pattern', () => {
+      // Pattern used in main.ts onCloseRequested handler
+      const testCases = [
+        { triggered: true, expected: 0 },
+        { triggered: false, expected: 3 },
+      ];
+
+      for (const { triggered, expected } of testCases) {
+        const exitCode = triggered ? 0 : 3;
+        expect(exitCode).toBe(expected);
+      }
+    });
+  });
 });

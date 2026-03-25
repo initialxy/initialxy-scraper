@@ -32,7 +32,11 @@ export function parseCLIArgs(): CLIArgs {
     .option('--output-curl', 'Output curl commands for matching URLs to stdout')
     .option('--flat-dir', 'Dump files flat in output-dir without subdirectories')
     .option('-W, --width <pixels>', 'Initial window width')
-    .option('-H, --height <pixels>', 'Initial window height');
+    .option('-H, --height <pixels>', 'Initial window height')
+    .option(
+      '--close-on-selector-complete',
+      'Close app with exit code 0 when all files matching --selector are saved'
+    );
 
   program.parse();
 
@@ -102,6 +106,10 @@ export function parseCLIArgs(): CLIArgs {
 
   if (options.height) {
     result.height = parseInt(options.height, 10);
+  }
+
+  if (options.closeOnSelectorComplete) {
+    result.closeOnSelectorComplete = true;
   }
 
   return result;
