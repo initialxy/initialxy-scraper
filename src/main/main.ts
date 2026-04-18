@@ -229,6 +229,16 @@ app.whenReady().then(async () => {
       onUpdateRequested: async () => {
         await updatePageSource();
         if (cliArgs.closeOnSelectorComplete && !outputManager?.hasPendingSelectorFiles()) {
+          // When --scroll is also set, only exit if we've reached the bottom of the page.
+          // Lazy-loaded content may not have been discovered yet.
+          if (cliArgs.scroll) {
+            const isAtBottom = await webView?.webContents.executeJavaScript(
+              'window.innerHeight + window.scrollY >= document.documentElement.scrollHeight'
+            );
+            if (!isAtBottom) {
+              return;
+            }
+          }
           process.exit(EXIT_CODES.success);
         }
       },
