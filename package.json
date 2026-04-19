@@ -11,7 +11,7 @@
     "dev": "vite",
     "electron:dev": "electron . --enable-logging",
     "build": "vite build",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint src/**/*.ts test/**/*.ts playwright.config.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts test/**/*.ts",
     "format:check": "prettier --check src/**/*.ts test/**/*.ts",
@@ -22,6 +22,7 @@
     "test:ui": "vitest --ui",
     "test:main": "vitest run --project=main",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "prepare": "husky"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.59.1",
     "@testing-library/dom": "^10.4.1",
     "@types/jsdom": "^28.0.0",
     "@types/node": "^25.3.3",

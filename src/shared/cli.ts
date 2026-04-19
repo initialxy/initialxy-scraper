@@ -51,8 +51,8 @@ export function parseCLIArgs(): CLIArgs {
 
   let url = args[0];
 
-  // Prefix with https:// if no protocol specified
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+  // Prefix with https:// if no protocol specified (allow about:blank for testing)
+  if (!url.startsWith('http://') && !url.startsWith('https://') && url !== 'about:blank') {
     url = `https://${url}`;
   }
 
