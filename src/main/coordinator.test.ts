@@ -1,31 +1,36 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Coordinator } from './coordinator.ts';
+import type {
+  ProtocolCallbacks,
+  ProtocolHandlerInterface,
+  AutomationManagerInterface,
+} from '../shared/types.ts';
+
+type MockProtocolClass = { register(): void; setCallbacks(cb: ProtocolCallbacks): void };
+type MockAutomationClass = { start(): void; onOutputEvent(): void };
 
 const mockProtocolState = vi.hoisted(() => ({
   registerCalls: 0,
-  setCallbacksCalls: [] as any[],
-  instances: [] as any[],
+  setCallbacksCalls: [] as ProtocolCallbacks[],
+  instances: [] as unknown[],
 }));
 
 const mockAutomationState = vi.hoisted(() => ({
   startCalls: 0,
   onOutputEventCalls: 0,
-  instances: [] as any[],
+  instances: [] as unknown[],
 }));
 
 const mockOutputManagerState = vi.hoisted(() => ({
-  initCalls: [] as any[],
+  initCalls: [] as unknown[],
 }));
 
 vi.mock('../shared/protocol.ts', () => ({
   ProtocolHandler: class MockProtocolHandler {
-    constructor() {
-      mockProtocolState.instances.push(this);
-    }
     register() {
       mockProtocolState.registerCalls++;
     }
-    setCallbacks(cb: any) {
+    setCallbacks(cb: ProtocolCallbacks) {
       mockProtocolState.setCallbacksCalls.push(cb);
     }
   },
@@ -33,9 +38,6 @@ vi.mock('../shared/protocol.ts', () => ({
 
 vi.mock('../shared/automation.ts', () => ({
   AutomationManager: class MockAutomationManager {
-    constructor() {
-      mockAutomationState.instances.push(this);
-    }
     start() {
       mockAutomationState.startCalls++;
     }
@@ -47,7 +49,7 @@ vi.mock('../shared/automation.ts', () => ({
 
 vi.mock('../shared/output_manager.ts', () => ({
   OutputManager: class MockOutputManager {
-    constructor(options: any) {
+    constructor(options: unknown) {
       mockOutputManagerState.initCalls.push(options);
     }
     responseCompleted() {}
@@ -62,21 +64,32 @@ const { EXIT_CODES } = await import('../shared/constants.ts');
 
 const MockProtocolHandler = (await import('../shared/protocol.ts')).ProtocolHandler as new (
   ...args: unknown[]
-) => unknown;
+) => MockProtocolClass;
 const MockAutomationManager = (await import('../shared/automation.ts')).AutomationManager as new (
   ...args: unknown[]
-) => unknown;
+) => MockAutomationClass;
 
 function createMockWebView() {
-  return {
+  const executeJavaScriptMock = vi
+    .fn<() => Promise<string>>()
+    .mockResolvedValue('<html><body></body></html>');
+  const getURLMock = vi.fn<() => string>().mockReturnValue('about:blank');
+  const sendMock = vi.fn<(channel: string, ...args: unknown[]) => void>();
+  const webView = {
     webContents: {
-      getURL: vi.fn(() => 'about:blank') as any,
-      executeJavaScript: vi.fn(async () => '<html><body></body></html>') as any,
+      getURL: getURLMock,
+      executeJavaScript: executeJavaScriptMock,
     },
     webContentsView: {
-      send: vi.fn() as any,
+      send: sendMock,
     },
   } as unknown as import('../shared/types.ts').WebViewInterface;
+  return {
+    webView,
+    getURLMock,
+    executeJavaScriptMock,
+    sendMock,
+  };
 }
 
 function createMockProcessExit() {
@@ -87,10 +100,19 @@ function createMockProcessExit() {
   return mock;
 }
 
-let exitCalls: { code: any }[] = [];
+interface ExitCall {
+  code: string | number;
+}
+
+let exitCalls: ExitCall[] = [];
 
 describe('Coordinator', () => {
-  let mockWebView: ReturnType<typeof createMockWebView>;
+  let mockWebView: {
+    webView: import('../shared/types.ts').WebViewInterface;
+    getURLMock: ReturnType<typeof vi.fn<() => string>>;
+    executeJavaScriptMock: ReturnType<typeof vi.fn<() => Promise<string>>>;
+    sendMock: ReturnType<typeof vi.fn<(channel: string, ...args: unknown[]) => void>>;
+  };
   let mockProcessExit: ReturnType<typeof createMockProcessExit>;
 
   beforeEach(() => {
@@ -125,9 +147,9 @@ describe('Coordinator', () => {
   describe('constructor', () => {
     it('should initialize with injected dependencies', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       expect(coordinator).toBeDefined();
@@ -137,9 +159,9 @@ describe('Coordinator', () => {
   describe('init', () => {
     it('should create OutputManager with correct options', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({
@@ -157,9 +179,9 @@ describe('Coordinator', () => {
 
     it('should call protocolHandler.setCallbacks with correct callbacks', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -172,9 +194,9 @@ describe('Coordinator', () => {
 
     it('should call protocolHandler.register()', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -184,9 +206,9 @@ describe('Coordinator', () => {
 
     it('should call automationManager.start()', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -195,12 +217,12 @@ describe('Coordinator', () => {
     });
 
     it('should pass baseUrl from webView to OutputManager', () => {
-      (mockWebView.webContents.getURL as any).mockReturnValue('https://example.com');
+      mockWebView.getURLMock.mockReturnValue('https://example.com');
 
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -211,9 +233,9 @@ describe('Coordinator', () => {
   describe('responseCompleted', () => {
     it('should forward request and response to OutputManager', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -236,9 +258,9 @@ describe('Coordinator', () => {
 
     it('should handle null outputManager gracefully', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.responseCompleted(
@@ -251,42 +273,40 @@ describe('Coordinator', () => {
   describe('updatePageSource', () => {
     it('should execute JavaScript and pass result to OutputManager', async () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
 
       await coordinator.updatePageSource();
 
-      expect(mockWebView.webContents.executeJavaScript).toHaveBeenCalledWith(
+      expect(mockWebView.executeJavaScriptMock).toHaveBeenCalledWith(
         'document.documentElement.outerHTML'
       );
     });
 
     it('should return early if outputManager is not initialized', async () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       await coordinator.updatePageSource();
 
-      expect(mockWebView.webContents.executeJavaScript).not.toHaveBeenCalled();
+      expect(mockWebView.executeJavaScriptMock).not.toHaveBeenCalled();
     });
 
     it('should handle JavaScript execution errors gracefully', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-      (mockWebView.webContents.executeJavaScript as any).mockRejectedValue(
-        new Error('JS execution failed')
-      );
+      mockWebView.executeJavaScriptMock.mockRejectedValue(new Error('JS execution failed'));
 
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -298,9 +318,9 @@ describe('Coordinator', () => {
 
     it('should close with success when selector files are complete and no scroll', async () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({
@@ -315,14 +335,14 @@ describe('Coordinator', () => {
     });
 
     it('should check scroll position when scroll is enabled', async () => {
-      (mockWebView.webContents.executeJavaScript as any)
-        .mockResolvedValueOnce('<html><body></body></html>')
-        .mockResolvedValueOnce(false as unknown as string);
+      mockWebView.executeJavaScriptMock
+        .mockResolvedValueOnce('true')
+        .mockResolvedValueOnce('false');
 
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({
@@ -333,16 +353,16 @@ describe('Coordinator', () => {
 
       await coordinator.updatePageSource();
 
-      expect(mockWebView.webContents.executeJavaScript).toHaveBeenCalledTimes(2);
+      expect(mockWebView.executeJavaScriptMock).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('closeOnIdleTimeout', () => {
     it('should exit with success when closeOnSelectorComplete is false', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({ closeOnSelectorComplete: false });
@@ -355,9 +375,9 @@ describe('Coordinator', () => {
 
     it('should exit with success when outputManager is null', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({ closeOnSelectorComplete: true });
@@ -372,9 +392,9 @@ describe('Coordinator', () => {
   describe('closeOnSelectorCheck', () => {
     it('should exit with success when all selector files are saved', async () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({
@@ -390,9 +410,9 @@ describe('Coordinator', () => {
 
     it('should not exit when closeOnSelectorComplete is false', async () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({ closeOnSelectorComplete: false });
@@ -402,14 +422,12 @@ describe('Coordinator', () => {
     });
 
     it('should check scroll position when scroll is enabled', async () => {
-      (mockWebView.webContents.executeJavaScript as any).mockResolvedValueOnce(
-        false as unknown as string
-      );
+      mockWebView.executeJavaScriptMock.mockResolvedValueOnce('false');
 
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({
@@ -425,9 +443,9 @@ describe('Coordinator', () => {
   describe('callback wiring', () => {
     it('should wire onRequestStarted callback to send IPC', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -442,17 +460,14 @@ describe('Coordinator', () => {
 
       callbacks.onRequestStarted(request);
 
-      expect(mockWebView.webContentsView.send).toHaveBeenCalledWith(
-        'network-request-start',
-        request
-      );
+      expect(mockWebView.sendMock).toHaveBeenCalledWith('network-request-start', request);
     });
 
     it('should wire onResponseCompleted callback to send IPC and forward to OutputManager', () => {
       const coordinator = new Coordinator({
-        protocolHandler: new MockProtocolHandler() as any,
-        automationManager: new MockAutomationManager() as any,
-        webView: mockWebView,
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
       });
 
       coordinator.init({});
@@ -472,7 +487,7 @@ describe('Coordinator', () => {
 
       callbacks.onResponseCompleted(request, response);
 
-      expect(mockWebView.webContentsView.send).toHaveBeenCalledWith('network-request-complete', {
+      expect(mockWebView.sendMock).toHaveBeenCalledWith('network-request-complete', {
         id: request.id,
         url: request.url,
         statusCode: response.statusCode,

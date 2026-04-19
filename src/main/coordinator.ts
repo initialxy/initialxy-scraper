@@ -1,19 +1,22 @@
-import { ProtocolHandler } from '../shared/protocol.ts';
-import { AutomationManager } from '../shared/automation.ts';
 import { OutputManager } from '../shared/output_manager.ts';
 import { EXIT_CODES } from '../shared/constants.ts';
-import type { CLIArgs, WebViewInterface } from '../shared/types.ts';
+import type {
+  CLIArgs,
+  WebViewInterface,
+  ProtocolHandlerInterface,
+  AutomationManagerInterface,
+} from '../shared/types.ts';
 
 export class Coordinator {
-  private protocolHandler: ProtocolHandler;
-  private automationManager: AutomationManager;
+  private protocolHandler: ProtocolHandlerInterface;
+  private automationManager: AutomationManagerInterface;
   private webView: WebViewInterface;
   private outputManager: OutputManager | null = null;
   private cliArgs: CLIArgs;
 
   constructor(options: {
-    protocolHandler: ProtocolHandler;
-    automationManager: AutomationManager;
+    protocolHandler: ProtocolHandlerInterface;
+    automationManager: AutomationManagerInterface;
     webView: WebViewInterface;
   }) {
     this.protocolHandler = options.protocolHandler;

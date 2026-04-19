@@ -66,3 +66,13 @@ export interface WebViewInterface {
   webContents: Electron.WebContents;
   webContentsView: UiPanelInterface;
 }
+
+export interface ProtocolHandlerInterface {
+  register(): void;
+  setCallbacks(callbacks: ProtocolCallbacks): void;
+}
+
+export interface AutomationManagerInterface {
+  start(): void;
+  onOutputEvent(): void;
+}
