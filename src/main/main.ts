@@ -125,7 +125,8 @@ function createWindow(cliArgs: CLIArgs): {
 
   const webViewInterface: WebViewInterface = {
     webContents: webView.webContents,
-    webContentsView: uiView as unknown as import('../shared/types.ts').UiPanelInterface,
+    webContentsView: uiView!
+      .webContents as unknown as import('../shared/types.ts').UiPanelInterface,
   };
 
   return { win, webViewInterface };
