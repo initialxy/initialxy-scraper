@@ -30,6 +30,7 @@ coverage/
 
 # Test output directory
 output/
+test-results/
 
 # Temporary files
 tmp/
