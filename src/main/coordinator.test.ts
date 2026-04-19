@@ -60,8 +60,12 @@ vi.mock('../shared/output_manager.ts', () => ({
 
 const { EXIT_CODES } = await import('../shared/constants.ts');
 
-const MockProtocolHandler = (await import('../shared/protocol.ts')).ProtocolHandler as new (...args: unknown[]) => unknown;
-const MockAutomationManager = (await import('../shared/automation.ts')).AutomationManager as new (...args: unknown[]) => unknown;
+const MockProtocolHandler = (await import('../shared/protocol.ts')).ProtocolHandler as new (
+  ...args: unknown[]
+) => unknown;
+const MockAutomationManager = (await import('../shared/automation.ts')).AutomationManager as new (
+  ...args: unknown[]
+) => unknown;
 
 function createMockWebView() {
   return {
@@ -275,7 +279,9 @@ describe('Coordinator', () => {
 
     it('should handle JavaScript execution errors gracefully', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-      (mockWebView.webContents.executeJavaScript as any).mockRejectedValue(new Error('JS execution failed'));
+      (mockWebView.webContents.executeJavaScript as any).mockRejectedValue(
+        new Error('JS execution failed')
+      );
 
       const coordinator = new Coordinator({
         protocolHandler: new MockProtocolHandler() as any,
@@ -396,7 +402,9 @@ describe('Coordinator', () => {
     });
 
     it('should check scroll position when scroll is enabled', async () => {
-      (mockWebView.webContents.executeJavaScript as any).mockResolvedValueOnce(false as unknown as string);
+      (mockWebView.webContents.executeJavaScript as any).mockResolvedValueOnce(
+        false as unknown as string
+      );
 
       const coordinator = new Coordinator({
         protocolHandler: new MockProtocolHandler() as any,
