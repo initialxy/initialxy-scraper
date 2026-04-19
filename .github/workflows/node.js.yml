@@ -25,3 +25,7 @@ jobs:
     - run: npm run build
     - run: npm run check
     - run: npm run test
+    - name: Run E2E tests
+      run: |
+        sudo apt-get update && sudo apt-get install -y xvfb
+        xvfb-run npm run test:e2e
