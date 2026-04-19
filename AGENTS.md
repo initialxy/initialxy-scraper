@@ -102,9 +102,11 @@ BaseWindow (1200x1000)
 |-----------|-------|--------------|
 | `src/main/coordinator.test.ts` | 20 | Constructor, init (OutputManager creation, callback wiring, register, start), responseCompleted, updatePageSource (JS execution, error handling, selector completion, scroll position), closeOnIdleTimeout, closeOnSelectorCheck, callback wiring |
 | `src/main/main.test.ts` | 10 | Error handling, IPC handlers, window creation, platform-specific behavior, user data directory |
-| `src/shared/protocol.test.ts` | 2 | Constructor, register method, mock callbacks |
+| `src/shared/protocol.test.ts` | 31 | Constructor, register, setCallbacks, handleRequest (normal flow, method/headers forwarding, 204 null body), inFlight tracking, cookie handling (get/set, expiration, secure, httponly, samesite, domain, malformed), request ID tracking, response headers forwarding, storeCookies edge cases, getCookiesForUrl error handling |
 | `src/shared/output_manager.test.ts` | 20 | Constructor, responseCompleted (immediate processing + buffering), updatePageSource, filtering, file writing, curl/ffmpeg command generation, onAllSelectorFilesSaved callback |
 | `src/shared/automation.test.ts` | 12 | Constructor, start, scroll logic, idle timer, onOutputEvent |
+| `src/shared/backend_utils.test.ts` | 17 | normalizeFilename (pathname extraction, root default, no extension, query params, directory structure), normalizeFlatFilename (basename only), generateSequentialFilename (zero-padding, widths, extension preservation), normalizeUrlWithBase (relative resolution, absolute override, error fallback) |
+| `src/shared/cross_stack_utils.test.ts` | 28 | escapeCurl (quotes, backticks, dollar signs, special chars, empty), generateCurl (basic, headers, continuation, escaping, methods), isM3u8 (extension, case-insensitive, query params, edge cases), generateFFmpegCommand (basic, headers, flags, escaping, URL input) |
 
 **Test Setup** (`test/setup/main.ts`):
 - Mocks entire Electron API for main process tests
