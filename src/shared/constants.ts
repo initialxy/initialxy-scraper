@@ -1,6 +1,7 @@
 // General purpose constants
 export const MS_IN_S = 1000;
 export const MILD_DELAY_MS = 100;
+export const NAVIGATION_DELAY_MS = 100;
 
 // IPC Channel constants
 export const IPC_CHANNELS = {

@@ -57,3 +57,12 @@ export interface OutputManagerOptions {
   onOutput: (url: string) => void;
   onAllSelectorFilesSaved?: () => void;
 }
+
+export interface UiPanelInterface {
+  send(channel: string, ...args: unknown[]): void;
+}
+
+export interface WebViewInterface {
+  webContents: Electron.WebContents;
+  webContentsView: UiPanelInterface;
+}

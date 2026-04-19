@@ -15,6 +15,10 @@ export class ProtocolHandler {
     this.webContentsSession = webContentsSession;
   }
 
+  setCallbacks(callbacks: ProtocolCallbacks): void {
+    this.callbacks = callbacks;
+  }
+
   register(): void {
     protocol.handle('https', this.handleRequest.bind(this));
     protocol.handle('http', this.handleRequest.bind(this));

@@ -132,23 +132,26 @@ When `--selector` specified, extract URLs using priority:
 #### Execution Flow
 
 1. Parse CLI arguments
-2. Instantiate OutputManager with CLI args
-3. Register Protocol API handler (protocol.ts) - callbacks to main.ts
-4. Navigate to `--url`
-5. Wait for page load complete
-6. If `--wait > 0`: Wait specified seconds (allows dynamic JS elements to load)
-7. Queue page source update to end of event loop: `setTimeout(() => main.updatePageSource(), 0)`
-8. If `--selector`: OutputManager tracks source URLs from page source
-   - main.ts calls outputManager.updatePageSource(pageSource)
-   - OutputManager extracts source URLs from DOM, normalizes, updates internal sourceUrls map
-   - Buffered responses (unprocessedResponses) are filtered against new sourceUrls
-   - Responses matching sourceUrls are processed immediately; non-matching stay buffered
-9. If `--scroll`: After `--wait` period, scroll webview every second
-   - After each scroll, queue page source update: `setTimeout(() => main.updatePageSource(), 100)`
-10. If `--close-on-idle`: Start idle timer after `--wait` period
+2. Instantiate ProtocolHandler (protocol.ts), AutomationManager (automation.ts), Coordinator (coordinator.ts)
+3. Coordinator creates OutputManager with CLI args
+4. Coordinator wires ProtocolHandler callbacks (IPC forwarding + OutputManager forwarding)
+5. Coordinator registers protocol handler
+6. Coordinator starts automation manager
+7. Navigate to `--url`
+8. Wait for page load complete
+9. If `--wait > 0`: Wait specified seconds (allows dynamic JS elements to load)
+10. Queue page source update to end of event loop: `setTimeout(() => coordinator.updatePageSource(), 0)`
+11. If `--selector`: OutputManager tracks source URLs from page source
+    - Coordinator calls outputManager.updatePageSource(pageSource)
+    - OutputManager extracts source URLs from DOM, normalizes, updates internal sourceUrls map
+    - Buffered responses (unprocessedResponses) are filtered against new sourceUrls
+    - Responses matching sourceUrls are processed immediately; non-matching stay buffered
+12. If `--scroll`: After `--wait` period, scroll webview every second
+    - After each scroll, queue page source update: `setTimeout(() => coordinator.updatePageSource(), 100)`
+13. If `--close-on-idle`: Start idle timer after `--wait` period
     - Timer resets on navigation events OR onOutput callbacks
     - If `--selector` also specified: Close when all source URLs completed (tracked via onOutput callbacks)
-11. Output responses:
+14. Output responses:
     - Without `--selector`: Output immediately when response completes (filtered by --filter if present)
     - With `--selector`: Output immediately if URL matches current sourceUrls, otherwise buffer until page source update
 
@@ -237,16 +240,28 @@ initialxy-scraper --verbose --output-dir ./debug https://example.com
 ### Process Architecture
 
 ```
-Main Process (main.ts) - Central Coordinator
+Main Process
 │
-├── Window Creation
-│   └── Single BaseWindow (no frame)
-│       └── Dual WebContentsView
-│           ├── Left: Dynamic webview (external URLs)
-│           └── Right: Fixed 500px panel (local HTML)
+├── main.ts - Electron Glue Code
+│   ├── Window Creation
+│   │   └── Single BaseWindow (no frame)
+│   │       └── Dual WebContentsView
+│   │           ├── Left: Dynamic webview (external URLs)
+│   │           └── Right: Fixed 500px panel (local HTML)
+│   ├── IPC Handlers (network-request-start/complete → Renderer)
+│   └── Navigation events → coordinator
+│
+├── coordinator.ts - Central Coordinator
+│   ├── Creates OutputManager with CLI args
+│   ├── Wires ProtocolHandler callbacks (IPC forwarding + OutputManager forwarding)
+│   ├── Calls protocolHandler.register()
+│   ├── Calls automationManager.start()
+│   ├── responseCompleted() → OutputManager
+│   ├── updatePageSource() → JS execution + OutputManager + exit logic
+│   └── closeOnIdleTimeout() / closeOnSelectorCheck() → process.exit()
 │
 ├── Protocol Handler (protocol.ts)
-│   ├── protocol.handle() - Request start/complete callbacks to main.ts
+│   ├── protocol.handle() - Request start/complete callbacks to coordinator
 │   └── Cookie management:
 │       - Retrieves cookies from webContents session for outgoing requests
 │       - Stores cookies from Set-Cookie response headers
@@ -254,8 +269,8 @@ Main Process (main.ts) - Central Coordinator
 ├── Output Manager (output_manager.ts)
 │   ├── Filters responses based on --filter, --selector, --output-dir, --output-curl
 │   ├── Processes immediately if URL matches current sourceUrls, otherwise buffers
-│   ├── Processes page source via main.ts.updatePageSource()
-│   └── Outputs to file/console via callbacks to main.ts
+│   ├── Processes page source via coordinator.updatePageSource()
+│   └── Outputs to file/console via callbacks to coordinator
 │
 ├── Automation Logic
 │   ├── --wait: Delay before page source update
@@ -269,17 +284,27 @@ Main Process (main.ts) - Central Coordinator
 
 ### Module Responsibilities
 
-**main.ts** (Central Coordinator):
+**coordinator.ts** (Central Coordinator):
 
-- Window creation and lifecycle management
-- WebContents access (only module with direct access)
-- Register protocol handler from protocol.ts
-- Receive request/response callbacks from protocol.ts
-- Send IPC events to renderer
-- Coordinate automation (--wait, --scroll, --close-on-idle)
-- Pass responses to output_manager.ts
-- Call output_manager.updatePageSource() when needed
-- Receive onOutput callbacks from output_manager.ts
+- **Central coordination**: Creates OutputManager, wires ProtocolHandler callbacks, manages exit logic
+- **Constructor params**: `protocolHandler`, `automationManager`, `webView` (injected dependencies)
+- **Methods**:
+  - `init(cliArgs)` - Creates OutputManager, sets up ProtocolHandler callbacks, registers protocol handler, starts AutomationManager
+  - `responseCompleted(request, response)` - Forwards to OutputManager
+  - `updatePageSource()` - Executes JS on webContents, passes to OutputManager, handles close-on-selector-complete logic
+  - `closeOnIdleTimeout()` - Determines exit code and calls `process.exit()`
+  - `closeOnSelectorCheck()` - Checks if all selector files saved, handles scroll-at-bottom check
+- **NO direct Electron access** - delegates to injected `webView` and `automationManager`
+- **All `process.exit()` calls** happen in Coordinator, never in main.ts
+
+**main.ts** (Electron Glue Code):
+
+- **Thin wrapper** - window creation, lifecycle, IPC, navigation
+- Window creation, lifecycle management (BaseWindow, WebContentsView)
+- WebContents access (ONLY module with direct access)
+- IPC handlers for renderer communication
+- Navigation events → coordinator
+- Exports: none (coordinator is module-level singleton)
 
 **protocol.ts** (Protocol API Abstraction):
 
@@ -299,12 +324,12 @@ Main Process (main.ts) - Central Coordinator
 - Receives CLI args: filter, selector, outputDir, outputCurl, renameSequence, flatDir
 - Maintains unprocessedResponses buffer for responses not matching current sourceUrls
 - Maintains sourceUrls map (persists across responseCompleted calls)
-- Receives page source via updatePageSource(pageSource) from main.ts
+- Receives page source via updatePageSource(pageSource) from coordinator.ts
 - Updates sourceUrls from HTML using jsdom (src, data-src priority)
 - Processes buffered responses against new sourceUrls
 - Normalizes URLs to absolute paths
 - Outputs to file (output-dir) or console (output-curl)
-- Callback to main.ts: `onOutput(url)` when response is output
+- Callback to coordinator.ts: `onOutput(url)` when response is output
 - Handles sequential renaming with collision detection
 
 ### Protocol API (protocol.ts)
@@ -314,8 +339,8 @@ Main Process (main.ts) - Central Coordinator
 **Responsibilities**:
 
 - ONLY intercept and forward requests
-- Callback to main.ts: `onRequestStarted(request)` with id, url, method, headers
-- Callback to main.ts: `onResponseCompleted(request, response)` with id, url, statusCode, headers, body
+- Callback to coordinator.ts: `onRequestStarted(request)` with id, url, method, headers
+- Callback to coordinator.ts: `onResponseCompleted(request, response)` with id, url, statusCode, headers, body
 - **Cookie Management**:
   - Retrieves cookies from webContents session for outgoing requests
   - Stores cookies from Set-Cookie response headers
@@ -342,6 +367,10 @@ export class ProtocolHandler {
   register(): void {
     protocol.handle('https', this.handleRequest.bind(this));
     protocol.handle('http', this.handleRequest.bind(this));
+  }
+
+  setCallbacks(callbacks: ProtocolCallbacks): void {
+    this.callbacks = callbacks;
   }
 
   private async handleRequest(request: Request): Promise<Response> {
@@ -490,7 +519,7 @@ export class ProtocolHandler {
 - Track in-flight URLs with `Set` to detect recursive calls
 - Return `Response` object with original status/headers
 - Works at session level - independent of window type
-- **NO output logic** - just callbacks to main.ts
+- **NO output logic** - just callbacks to coordinator.ts
 - **Cookie persistence**: Cookies are stored in webContents session partition and persist across browser restarts
 
 ### Output Manager (output_manager.ts)
@@ -502,7 +531,7 @@ export class ProtocolHandler {
 - Extract source URLs from HTML using jsdom (src, data-src priority)
 - Normalize URLs to absolute paths
 - Output to file (output-dir) or console (output-curl)
-- Callback to main.ts: `onOutput(url)` when response is output (resets idle timer)
+- Callback to coordinator.ts: `onOutput(url)` when response is output (resets idle timer)
 
 **Eligibility Logic**:
 
@@ -531,7 +560,7 @@ outputManager.responseCompleted(request, response) {
   this.processResponse(request, response);
 }
 
-// When main.ts calls updatePageSource
+// When coordinator.ts calls updatePageSource
 outputManager.updatePageSource(pageSource): void {
   // Parse HTML with jsdom - sourceUrls is local, not state
   const sourceUrls = extractSourceUrls(pageSource, this.selector);
@@ -561,7 +590,7 @@ outputManager.processResponse(request, response) {
     // Exit code 5 on file write failure
   }
 
-  // Notify main.ts (resets idle timer)
+  // Notify coordinator.ts (resets idle timer)
   this.callbacks.onOutput(response.url);
 }
 ```
@@ -663,11 +692,14 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 
 ### Module Architecture
 
-- [ ] **main.ts**: Central coordinator with WebContents access only
-- [ ] **protocol.ts**: Protocol API abstraction with callbacks to main.ts
-- [ ] **output_manager.ts**: Output logic with callbacks to main.ts
+- [ ] **coordinator.ts**: Central coordinator with injected dependencies, no direct Electron access
+- [ ] **main.ts**: Thin Electron glue code (window creation, IPC, lifecycle)
+- [ ] **protocol.ts**: Protocol API abstraction with callbacks to coordinator.ts
+- [ ] **output_manager.ts**: Output logic with callbacks to coordinator.ts
 - [ ] No circular dependencies between modules
 - [ ] Clear separation: protocol.ts has NO output logic, output_manager.ts has NO WebContents access
+- [ ] All `process.exit()` calls happen in coordinator.ts, never in main.ts
+- [ ] Coordinator accepts injected `ProtocolHandler`, `AutomationManager`, `WebViewInterface`
 
 ### Network Monitor Panel
 

@@ -7,14 +7,18 @@
 
 ## Architecture Overview
 
-**Three-Module Separation**:
+**Four-Module Separation**:
 
 ```
-main.ts (Coordinator) ──┬→ ProtocolHandler (interception only)
-                        │   callbacks → main.ts
-                        ├→ OutputManager (filtering, buffering, output)
-                        │   onOutput → AutomationManager
-                        └→ AutomationManager (wait, scroll, close-on-idle)
+coordinator.ts (Coordinator) ──┬→ ProtocolHandler (interception only)
+                               │   callbacks → coordinator.ts
+                               ├→ OutputManager (filtering, buffering, output)
+                               │   onOutput → AutomationManager
+                               └→ AutomationManager (wait, scroll, close-on-idle)
+
+main.ts ──┬→ Window creation & lifecycle (Electron glue)
+          ├→ IPC handlers (renderer ↔ main)
+          └→ Navigation events → coordinator
 ```
 
 **Window Structure**:
@@ -29,12 +33,27 @@ BaseWindow (1200x1000)
 
 ## Module Responsibilities
 
+### coordinator.ts (`src/main/coordinator.ts`)
+
+- **Central coordination**: Creates OutputManager, wires ProtocolHandler callbacks, manages exit logic
+- **Constructor params**: `protocolHandler`, `automationManager`, `webView` (injected dependencies)
+- **Methods**:
+  - `init(cliArgs)` - Creates OutputManager, sets up ProtocolHandler callbacks, registers protocol handler, starts AutomationManager
+  - `responseCompleted(request, response)` - Forwards to OutputManager
+  - `updatePageSource()` - Executes JS on webContents, passes to OutputManager, handles close-on-selector-complete logic
+  - `closeOnIdleTimeout()` - Determines exit code and calls `process.exit()`
+  - `closeOnSelectorCheck()` - Checks if all selector files saved, handles scroll-at-bottom check
+- **NO direct Electron access** - delegates to injected `webView` and `automationManager`
+- **All `process.exit()` calls** happen in Coordinator, never in main.ts
+
 ### main.ts (`src/main/main.ts`)
 
-- Window creation, lifecycle management
+- **Thin Electron glue code** - window creation, lifecycle, IPC, navigation
+- Window creation, lifecycle management (BaseWindow, WebContentsView)
 - WebContents access (ONLY module with direct access)
 - IPC handlers for renderer communication
-- Exports: `updatePageSource()`
+- Navigation events → coordinator
+- Exports: none (coordinator is module-level singleton)
 
 ### ProtocolHandler (`src/shared/protocol.ts`)
 
@@ -81,6 +100,7 @@ BaseWindow (1200x1000)
 
 | Test File | Tests | Key Coverage |
 |-----------|-------|--------------|
+| `src/main/coordinator.test.ts` | 20 | Constructor, init (OutputManager creation, callback wiring, register, start), responseCompleted, updatePageSource (JS execution, error handling, selector completion, scroll position), closeOnIdleTimeout, closeOnSelectorCheck, callback wiring |
 | `src/main/main.test.ts` | 10 | Error handling, IPC handlers, window creation, platform-specific behavior, user data directory |
 | `src/shared/protocol.test.ts` | 2 | Constructor, register method, mock callbacks |
 | `src/shared/output_manager.test.ts` | 20 | Constructor, responseCompleted (immediate processing + buffering), updatePageSource, filtering, file writing, curl/ffmpeg command generation, onAllSelectorFilesSaved callback |
@@ -104,7 +124,8 @@ npm run test:coverage     # Coverage report
 
 | File                              | Purpose                                 |
 | --------------------------------- | --------------------------------------- |
-| `src/main/main.ts`                | Central coordinator                     |
+| `src/main/coordinator.ts`         | Central coordinator                     |
+| `src/main/main.ts`                | Electron glue code (window, IPC, lifecycle) |
 | `src/shared/protocol.ts`          | Protocol interception only              |
 | `src/shared/output_manager.ts`    | Filtering, buffering, output            |
 | `src/shared/automation.ts`        | Timing automation                       |
@@ -213,20 +234,47 @@ npm run test:coverage
 
 ## Common Patterns
 
-**ProtocolHandler instantiation**:
+**Coordinator instantiation** (in main.ts):
 
 ```typescript
-const handler = new ProtocolHandler(baseUrl, {
-  onRequestStarted: (req) => {
-    /* send IPC */
+const automationManager = new AutomationManager({
+  waitS: cliArgs.wait || 0,
+  scrollIntervalS: cliArgs.scroll ? 1 : 0,
+  closeOnIdleTimeS: cliArgs.closeOnIdle || null,
+  onScrollRequested: async () => {
+    await webView?.webContents.executeJavaScript(`window.scrollBy(0, ${cliArgs.scroll});`);
   },
-  onResponseCompleted: (req, res) => {
-    /* forward to OutputManager */
+  onUpdateRequested: async () => {
+    await coordinator?.updatePageSource();
+  },
+  onCloseRequested: () => {
+    coordinator?.closeOnIdleTimeout();
   },
 });
+
+const protocolHandler = new ProtocolHandler(
+  webViewInterface.webContents.getURL() || 'about:blank',
+  { onRequestStarted: () => {}, onResponseCompleted: () => {} },
+  webViewInterface.webContents.session || session.defaultSession,
+);
+
+coordinator = new Coordinator({
+  protocolHandler,
+  automationManager,
+  webView: webViewInterface,
+});
+
+coordinator.init(cliArgs);
 ```
 
-**OutputManager instantiation**:
+**ProtocolHandler instantiation** (standalone):
+
+```typescript
+const handler = new ProtocolHandler(baseUrl, callbacks, session);
+handler.register();
+```
+
+**OutputManager instantiation** (inside Coordinator.init):
 
 ```typescript
 const manager = new OutputManager({
@@ -237,10 +285,8 @@ const manager = new OutputManager({
   outputCurl,
   flatDir,
   baseUrl,
-  onOutput: (url) => automationManager?.onOutputEvent(),
+  onOutput: () => automationManager?.onOutputEvent(),
   onAllSelectorFilesSaved: () => {
-    // When --scroll is set, don't close immediately.
-    // Wait for updatePageSource() to be called and check hasPendingSelectorFiles().
     if (cliArgs.closeOnSelectorComplete && !cliArgs.scroll) {
       process.exit(EXIT_CODES.success);
     }
@@ -248,11 +294,11 @@ const manager = new OutputManager({
 });
 ```
 
-**Page source update**:
+**Page source update** (inside Coordinator):
 
 ```typescript
 export async function updatePageSource(): Promise<void> {
-  if (!webView?.webContents || !outputManager) return;
+  if (!outputManager) return;
   const source = await webView.webContents.executeJavaScript('document.documentElement.outerHTML');
   outputManager.updatePageSource(source);
 }
