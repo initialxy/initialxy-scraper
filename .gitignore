@@ -40,3 +40,6 @@ temp/
 # Environment
 .env
 .env.local
+
+# Nanocoder todos
+.nanocoder

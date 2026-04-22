@@ -110,6 +110,7 @@ Command-line arguments for automated web scraping. Browser remains visible (not 
 | `--flat-dir`        | -         | bool   | Flat output directory (no subdirectories)                                                   |
 | `--width`           | `-W`      | number | Initial window width in pixels                                                              |
 | `--height`          | `-H`      | number | Initial window height in pixels                                                             |
+| `--clear-cookies`   | -         | bool   | Clear all persisted cookies from the SQLite database                                        |
 
 #### Eligibility Logic
 
@@ -211,6 +212,9 @@ initialxy-scraper --selector "img" --rename-sequence 05d --output-dir ./images h
 
 # Verbose mode for debugging
 initialxy-scraper --verbose --output-dir ./debug https://example.com
+
+# Clear persisted cookies before starting
+initialxy-scraper --clear-cookies https://example.com
 ```
 
 ### 3. User Data Management
@@ -249,6 +253,7 @@ Main Process
 │   │           ├── Left: Dynamic webview (external URLs)
 │   │           └── Right: Fixed 500px panel (local HTML)
 │   ├── IPC Handlers (network-request-start/complete → Renderer)
+│   ├── CookieStore initialization
 │   └── Navigation events → coordinator
 │
 ├── coordinator.ts - Central Coordinator
@@ -260,11 +265,19 @@ Main Process
 │   ├── updatePageSource() → JS execution + OutputManager + exit logic
 │   └── closeOnIdleTimeout() / closeOnSelectorCheck() → process.exit()
 │
+├── CookieStore (cookie_store.ts)
+│   ├── Persistent cookie storage using node:sqlite (DatabaseSync)
+│   ├── Stores cookies in userdata/cookies.db
+│   ├── Expiry filtering on load (excludes expired and session cookies)
+│   ├── Domain normalization (strips leading dots from wildcard domains)
+│   └── Methods: save(), saveAll(), loadAll(), loadByDomain(), deleteByDomain(), clear(), cleanup(), close()
+│
 ├── Protocol Handler (protocol.ts)
 │   ├── protocol.handle() - Request start/complete callbacks to coordinator
 │   └── Cookie management:
 │       - Retrieves cookies from webContents session for outgoing requests
-│       - Stores cookies from Set-Cookie response headers
+│       - Stores cookies from Set-Cookie response headers (both session + SQLite)
+│       - loadPersistedCookies() loads SQLite cookies into Electron session on startup
 │
 ├── Output Manager (output_manager.ts)
 │   ├── Filters responses based on --filter, --selector, --output-dir, --output-curl
@@ -303,8 +316,19 @@ Main Process
 - Window creation, lifecycle management (BaseWindow, WebContentsView)
 - WebContents access (ONLY module with direct access)
 - IPC handlers for renderer communication
+- CookieStore initialization and `--clear-cookies` flag handling
 - Navigation events → coordinator
 - Exports: none (coordinator is module-level singleton)
+
+**cookie_store.ts** (Persistent Cookie Storage):
+
+- Uses Node.js built-in `node:sqlite` (DatabaseSync) — no native compilation
+- Stores cookies in `userdata/cookies.db` with WAL mode for concurrency
+- `loadAll()` / `loadByDomain()` filter out expired and session cookies
+- `cleanup()` removes session cookies and expired cookies on startup
+- Domain normalization: strips leading dots from wildcard domains
+- `clear()` wipes all cookies from the database
+- Methods: `save()`, `saveAll()`, `loadAll()`, `loadByDomain()`, `deleteByDomain()`, `clear()`, `cleanup()`, `close()`
 
 **protocol.ts** (Protocol API Abstraction):
 
@@ -312,9 +336,12 @@ Main Process
 - Forwards ALL requests unchanged (no modification)
 - **Cookie Management**:
   - Retrieves cookies from webContents session for outgoing requests via `session.cookies.get()`
-  - Stores cookies from Set-Cookie response headers via `session.cookies.set()`
+  - Stores cookies from Set-Cookie response headers via `session.cookies.set()` AND `CookieStore.save()`
   - Parses Set-Cookie attributes (domain, path, expires, secure, httponly, samesite)
-  - Uses webContents session partition for persistent cookie storage
+  - Uses webContents session partition for immediate cookie delivery
+  - Uses CookieStore (SQLite) for persistent cookie storage across restarts
+  - `loadPersistedCookies()` loads SQLite cookies into Electron session on startup
+  - Domain normalization: strips leading dots from wildcard domains
 - Callbacks to main.ts: `onRequestStarted(request)`, `onResponseCompleted(request, response)`
 - Uses `inFlight` Set to prevent infinite recursion
 - **NO output logic**, **NO filtering**, **NO file I/O**
@@ -737,11 +764,14 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] Cookies are retrieved from webContents session for outgoing requests
 - [ ] Cookies are stored from Set-Cookie response headers
 - [ ] Cookie attributes are parsed correctly (domain, path, expires, secure, httponly, samesite)
-- [ ] Cookies persist across browser restarts (stored in userdata/Default/Cookies)
-- [ ] Session cookies (no expiration) are handled correctly
+- [ ] Cookies persist across browser restarts via SQLite database (userdata/cookies.db)
+- [ ] Session cookies (no expiration) are handled correctly (excluded from persistence on load)
+- [ ] Expired cookies are excluded from persistence and filtered on load
 - [ ] Secure flag is respected for HTTPS-only cookies
 - [ ] httpOnly flag is tracked (though not accessible to JavaScript)
 - [ ] SameSite attribute is parsed and stored
+- [ ] Wildcard domains (`.example.com`) are normalized before URL construction
+- [ ] `--clear-cookies` flag wipes the SQLite database before loading persisted cookies
 
 ### Security & Detection
 

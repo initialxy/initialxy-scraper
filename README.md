@@ -86,6 +86,7 @@ npm start -- --verbose --output-dir ./debug https://initialxy.com
 | `--flat-dir`        | -         | bool   | Flat output directory (no subdirectories)                                                   |
 | `--width`           | `-W`      | number | Initial window width in pixels                                                              |
 | `--height`          | `-H`      | number | Initial window height in pixels                                                             |
+| `--clear-cookies`   | -         | bool   | Clear all persisted cookies from the SQLite database                                        |
 
 ## Exit Codes
 
