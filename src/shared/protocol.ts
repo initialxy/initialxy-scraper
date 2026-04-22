@@ -1,6 +1,7 @@
 import { protocol, net } from 'electron';
 import type { ProtocolCallbacks } from './types.ts';
 import { RESPONSE_WITHOUT_BODY } from './constants.ts';
+import { CookieStore } from './cookie_store.ts';
 
 export class ProtocolHandler {
   private baseUrl: string;
@@ -8,15 +9,55 @@ export class ProtocolHandler {
   private inFlight = new Set<string>();
   private requestIdCounter = 0;
   private webContentsSession: Electron.Session;
+  private cookieStore: CookieStore;
 
-  constructor(baseUrl: string, callbacks: ProtocolCallbacks, webContentsSession: Electron.Session) {
+  constructor(
+    baseUrl: string,
+    callbacks: ProtocolCallbacks,
+    webContentsSession: Electron.Session,
+    cookieStore: CookieStore
+  ) {
     this.baseUrl = baseUrl;
     this.callbacks = callbacks;
     this.webContentsSession = webContentsSession;
+    this.cookieStore = cookieStore;
   }
 
   setCallbacks(callbacks: ProtocolCallbacks): void {
     this.callbacks = callbacks;
+  }
+
+  loadPersistedCookies(): void {
+    this.cookieStore.cleanup();
+    const cookies = this.cookieStore.loadAll();
+    if (cookies.length === 0) return;
+
+    const promises = cookies.map(async (cookie) => {
+      try {
+        // Strip leading dot from domain for valid URL construction
+        const domain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+        await this.webContentsSession.cookies.set({
+          name: cookie.name,
+          value: cookie.value,
+          url: `${cookie.secure ? 'https' : 'http'}://${domain}${cookie.path}`,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite as
+            | 'unspecified'
+            | 'no_restriction'
+            | 'lax'
+            | 'strict'
+            | undefined,
+          expirationDate: cookie.expirationDate,
+        });
+      } catch {
+        // Silently fail - individual cookie failures shouldn't break startup
+      }
+    });
+
+    Promise.allSettled(promises).catch(() => {
+      // Ignore errors
+    });
   }
 
   register(): void {
@@ -132,6 +173,13 @@ export class ProtocolHandler {
           return;
         }
 
+        // Extract domain from attribute, default to response hostname
+        const rawDomain =
+          attributes.find((a) => a.toLowerCase().startsWith('domain='))?.split('=')[1] ||
+          urlObj.hostname;
+        // Strip leading dot for consistent storage and URL construction
+        const domain = rawDomain.startsWith('.') ? rawDomain.slice(1) : rawDomain;
+
         // Extract expiration date if present
         const expiresAttr = attributes.find((a) => a.toLowerCase().startsWith('expires='));
         const hasExpiration = !!expiresAttr;
@@ -142,11 +190,8 @@ export class ProtocolHandler {
         const cookie = {
           name: name,
           value: value,
-          url: url,
-          // Extract domain from URL or attribute
-          domain:
-            attributes.find((a) => a.toLowerCase().startsWith('domain='))?.split('=')[1] ||
-            urlObj.hostname,
+          url: `${urlObj.protocol}//${domain}`,
+          domain: domain,
           // Extract path from attribute or default to /
           path: attributes.find((a) => a.toLowerCase().startsWith('path='))?.split('=')[1] || '/',
           // Session cookie has no expiration date
@@ -160,14 +205,33 @@ export class ProtocolHandler {
           // Check if httpOnly flag is set
           httpOnly: attributes.some((a) => a.toLowerCase() === 'httponly'),
           // Check SameSite attribute
-          sameSite: attributes
-            .find((a) => a.toLowerCase().startsWith('samesite='))
-            ?.split('=')[1]
-            ?.toLowerCase() as 'unspecified' | 'no_restriction' | 'lax' | 'strict' | undefined,
+          sameSite: (() => {
+            const raw = attributes
+              .find((a) => a.toLowerCase().startsWith('samesite='))
+              ?.split('=')[1]
+              ?.toLowerCase();
+            if (raw === 'none') return 'no_restriction' as const;
+            if (raw === 'lax') return 'lax' as const;
+            if (raw === 'strict') return 'strict' as const;
+            return undefined;
+          })(),
         };
 
         // Set cookie in the web contents session
         await this.webContentsSession.cookies.set(cookie);
+
+        // Persist to SQLite
+        this.cookieStore.save({
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite,
+          expirationDate: cookie.expirationDate,
+          session: cookie.session,
+        });
       });
 
       await Promise.all(promises);

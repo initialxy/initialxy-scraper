@@ -9,6 +9,7 @@ import {
 } from 'electron';
 import { AutomationManager } from '../shared/automation.ts';
 import { ProtocolHandler } from '../shared/protocol.ts';
+import { CookieStore } from '../shared/cookie_store.ts';
 import { Coordinator } from './coordinator.ts';
 import { parseCLIArgs } from '../shared/cli.ts';
 import { NAVIGATION_DELAY_MS } from '../shared/constants.ts';
@@ -168,14 +169,18 @@ app.whenReady().then(async () => {
     },
   });
 
+  const cookieStore = new CookieStore(path.join(userDataPath, 'cookies.db'));
   const protocolHandler = new ProtocolHandler(
     webViewInterface.webContents.getURL() || 'about:blank',
     {
       onRequestStarted: () => {},
       onResponseCompleted: () => {},
     },
-    webViewInterface.webContents.session || session.defaultSession
+    webViewInterface.webContents.session || session.defaultSession,
+    cookieStore
   );
+
+  protocolHandler.loadPersistedCookies();
 
   coordinator = new Coordinator({
     protocolHandler,

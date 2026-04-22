@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ProtocolHandler } from './protocol.ts';
 import type { ProtocolCallbacks } from './types.ts';
+import type { CookieStore } from './cookie_store.ts';
 import * as electron from 'electron';
 
 describe('ProtocolHandler', () => {
   let handler: ProtocolHandler;
   let mockCallbacks: ProtocolCallbacks;
   let mockSession: Electron.Session;
+  let mockCookieStore: CookieStore;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,7 +25,22 @@ describe('ProtocolHandler', () => {
       },
     } as unknown as Electron.Session;
 
-    handler = new ProtocolHandler('https://example.com', mockCallbacks, mockSession);
+    mockCookieStore = {
+      save: vi.fn(),
+      saveAll: vi.fn(),
+      loadAll: vi.fn().mockReturnValue([]),
+      loadByDomain: vi.fn().mockReturnValue([]),
+      deleteByDomain: vi.fn(),
+      clear: vi.fn(),
+      close: vi.fn(),
+    } as unknown as CookieStore;
+
+    handler = new ProtocolHandler(
+      'https://example.com',
+      mockCallbacks,
+      mockSession,
+      mockCookieStore
+    );
   });
 
   afterEach(() => {
@@ -61,6 +78,10 @@ describe('ProtocolHandler', () => {
 
   function getSetCookieMock() {
     return vi.mocked(mockSession.cookies.set);
+  }
+
+  function getCookieStoreSaveMock() {
+    return vi.mocked(mockCookieStore.save);
   }
 
   describe('constructor', () => {
@@ -263,6 +284,26 @@ describe('ProtocolHandler', () => {
       await callHandleRequest(handler, request);
 
       expect(getSetCookieMock()).toHaveBeenCalled();
+    });
+
+    it('should persist Set-Cookie to cookieStore', async () => {
+      const mockResponse = createMockResponse(200, {
+        'set-cookie': 'session=abc123; Path=/; HttpOnly; Secure',
+      });
+      vi.spyOn(electron.net, 'fetch').mockResolvedValue(mockResponse);
+
+      handler.register();
+
+      const request = new Request('https://example.com/test', { method: 'GET' });
+      await callHandleRequest(handler, request);
+
+      expect(getCookieStoreSaveMock()).toHaveBeenCalled();
+      const savedCookie = getCookieStoreSaveMock().mock.calls[0][0];
+      expect(savedCookie.name).toBe('session');
+      expect(savedCookie.value).toBe('abc123');
+      expect(savedCookie.secure).toBe(true);
+      expect(savedCookie.httpOnly).toBe(true);
+      expect(savedCookie.path).toBe('/');
     });
 
     it('should handle multiple Set-Cookie headers as array', async () => {
@@ -484,7 +525,12 @@ describe('ProtocolHandler', () => {
     });
 
     it('should handle http URL without secure flag', async () => {
-      const handler2 = new ProtocolHandler('http://example.com', mockCallbacks, mockSession);
+      const handler2 = new ProtocolHandler(
+        'http://example.com',
+        mockCallbacks,
+        mockSession,
+        mockCookieStore
+      );
 
       const mockResponse = createMockResponse(200, {
         'set-cookie': 'cookie=val; Path=/',
@@ -542,7 +588,7 @@ describe('ProtocolHandler', () => {
       await callHandleRequest(handler, request);
 
       const cookieCall = getSetCookieMock().mock.calls[0][0] as Electron.Cookie;
-      expect(cookieCall.sameSite).toBe('none');
+      expect(cookieCall.sameSite).toBe('no_restriction');
     });
 
     it('should parse cookie with multiple attributes', async () => {
