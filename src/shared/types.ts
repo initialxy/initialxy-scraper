@@ -15,6 +15,7 @@ export interface CLIArgs {
   flatDir?: boolean;
   width?: number;
   height?: number;
+  clearCookies?: boolean;
 }
 
 export interface NetworkRequest {

@@ -170,6 +170,12 @@ app.whenReady().then(async () => {
   });
 
   const cookieStore = new CookieStore(path.join(userDataPath, 'cookies.db'));
+
+  if (cliArgs.clearCookies) {
+    cookieStore.clear();
+    console.log('[App] Cookies cleared');
+  }
+
   const protocolHandler = new ProtocolHandler(
     webViewInterface.webContents.getURL() || 'about:blank',
     {

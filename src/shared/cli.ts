@@ -36,7 +36,8 @@ export function parseCLIArgs(): CLIArgs {
     .option(
       '--close-on-selector-complete',
       'Close app with exit code 0 when all files matching --selector are saved'
-    );
+    )
+    .option('--clear-cookies', 'Clear all persisted cookies from the database');
 
   program.parse();
 
@@ -110,6 +111,10 @@ export function parseCLIArgs(): CLIArgs {
 
   if (options.closeOnSelectorComplete) {
     result.closeOnSelectorComplete = true;
+  }
+
+  if (options.clearCookies) {
+    result.clearCookies = true;
   }
 
   return result;
