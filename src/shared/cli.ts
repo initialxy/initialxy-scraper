@@ -20,9 +20,9 @@ export function parseCLIArgs(): CLIArgs {
     .option('-s, --selector <selector>', 'CSS selector for src attribute extraction')
     .option(
       '-w, --wait <seconds>',
-      'Wait seconds after page load before closing (starts idle timer if --close-on-idle is also set)'
+      'Wait seconds after app start before triggering page source update, auto-scroll, and idle timer'
     )
-    .option('-r, --scroll <pixels>', 'Scroll down by pixels (0 = scroll to bottom)')
+    .option('-r, --scroll <pixels>', 'Pixels to scroll down every second (omit to disable)')
     .option('-c, --close-on-idle <seconds>', 'Close window after N seconds of network idle')
     .option(
       '--rename-sequence <digits>',

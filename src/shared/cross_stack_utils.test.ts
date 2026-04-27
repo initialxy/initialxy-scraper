@@ -166,4 +166,15 @@ describe('generateFFmpegCommand', () => {
     const result = generateFFmpegCommand('https://example.com/path/stream.m3u8?token=abc', {});
     expect(result).toContain('-i "https://example.com/path/stream.m3u8?token=abc"');
   });
+
+  it('should place headers before -i so they apply to the input', () => {
+    const result = generateFFmpegCommand('https://example.com/stream.m3u8', {
+      Cookie: 'session=abc123',
+    });
+    const headersIdx = result.indexOf('-headers');
+    const inputIdx = result.indexOf('-i "');
+    expect(headersIdx).toBeGreaterThan(-1);
+    expect(inputIdx).toBeGreaterThan(-1);
+    expect(headersIdx).toBeLessThan(inputIdx);
+  });
 });

@@ -17,11 +17,12 @@ Additionally, I wanted to use this exercise to play with a **fully local** vibe 
 ## Features
 
 - **No DevTools, Debugger or Automation activation**: Avoid detection by modern anti-scraping solutions
-- **Network Monitoring**: See all network requests and copy as cURL or ffmpeg commands to replay them exactly as is.
+- **Network Monitor UI**: Real-time network request monitoring in a split-panel interface (500px right panel) with one-click cURL/ffmpeg copy
 - **CLI Scraping Automation**: Automated bulk scraping with another script without Chrome Driver or Remote Debugger.
 - **Advanced Filters**: Not only can you filter by URL patterns, but also use CSS selector on the page source to find targeted elements and extract their sources while preserving order based on DOM structure. Responses matching current page state are saved immediately; others are buffered until page source updates.
 - **Automatic Scrolling**: Scroll automatically at a customized speed to defeat lazy loading or infinite scrolling elements.
 - **Close on idle**: Automatically exit the process after a period of inactivity, which allows coordination script to move on to the next URL in a bulk process without having to inspect browser behavior.
+- **Persistent Cookie Storage**: Cookies are stored in SQLite (`userdata/cookies.db`) and survive app restarts, enabling multi-session scraping workflows. Use `--clear-cookies` to wipe the database.
 
 ## Installation
 
@@ -66,6 +67,12 @@ npm start -- --output-dir ./flat --flat-dir https://initialxy.com
 
 # Verbose mode
 npm start -- --verbose --output-dir ./debug https://initialxy.com
+
+# Custom window size
+npm start -- --width 1920 --height 1080 https://initialxy.com
+
+# Clear cookies before scraping
+npm start -- --clear-cookies --output-dir ./fresh https://initialxy.com
 ```
 
 ### CLI Arguments
@@ -77,8 +84,8 @@ npm start -- --verbose --output-dir ./debug https://initialxy.com
 | `--output-curl`     | -         | bool   | Output cURL commands to stdout                                                              |
 | `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl)                           |
 | `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                                             |
-| `--wait`            | `-w`      | number | Wait time in seconds after page load before starting idle timer (if --close-on-idle is set) |
-| `--scroll`          | `-r`      | number | Pixels to scroll down every second                                                          |
+| `--wait`            | `-w`      | number | Wait seconds after app start before triggering page source update, auto-scroll, and idle timer |
+| `--scroll`          | `-r`      | number | Pixels to scroll down every second (omit to disable scrolling)                              |
 | `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |
 | `--close-on-selector-complete` | - | bool | Close app with exit code 0 when all files matching --selector are saved |
 | `--rename-sequence` | -         | string | Number of digits for zero-padding (e.g., `4` for `0001`, `05` for `00001`)                  |
@@ -100,11 +107,22 @@ npm start -- --verbose --output-dir ./debug https://initialxy.com
 ## Development
 
 ```bash
-# Format code
+# Lint and format
+npm run lint
+npm run lint:fix
 npm run format
 
 # Type check
+npm run typecheck
+
+# Run all checks (lint + format + typecheck)
 npm run check
+
+# Run tests
+npm run test
+npm run test:unit
+npm run test:e2e
+npm run test:coverage
 
 # Start development
 npm start -- https://initialxy.com
