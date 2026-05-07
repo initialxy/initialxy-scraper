@@ -151,7 +151,7 @@ describe('generateFFmpegCommand', () => {
     const result = generateFFmpegCommand('https://example.com/stream.m3u8', {});
     expect(result).toContain('-protocol_whitelist file,http,https,tcp,tls');
     expect(result).toContain('-extension_picky 0');
-    expect(result).toContain('-readrate 2');
+    expect(result).toContain('-readrate 4');
     expect(result).toContain('-reconnect 1');
     expect(result).toContain('-reconnect_at_eof 1');
     expect(result).toContain('-reconnect_streamed 1');
@@ -167,14 +167,17 @@ describe('generateFFmpegCommand', () => {
     expect(result).toContain('-i "https://example.com/path/stream.m3u8?token=abc"');
   });
 
-  it('should place headers before -i so they apply to the input', () => {
+  it('should place -i right after -readrate 2', () => {
     const result = generateFFmpegCommand('https://example.com/stream.m3u8', {
       Cookie: 'session=abc123',
     });
-    const headersIdx = result.indexOf('-headers');
+    const readrateIdx = result.indexOf('-readrate 4');
     const inputIdx = result.indexOf('-i "');
-    expect(headersIdx).toBeGreaterThan(-1);
+    const headersIdx = result.indexOf('-headers');
+    expect(readrateIdx).toBeGreaterThan(-1);
     expect(inputIdx).toBeGreaterThan(-1);
-    expect(headersIdx).toBeLessThan(inputIdx);
+    expect(headersIdx).toBeGreaterThan(-1);
+    expect(result.substring(readrateIdx, inputIdx)).toBe('-readrate 4 ');
+    expect(headersIdx).toBeGreaterThan(inputIdx);
   });
 });
