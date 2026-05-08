@@ -164,7 +164,7 @@ describe('generateFFmpegCommand', () => {
 
   it('should include URL in input flag', () => {
     const result = generateFFmpegCommand('https://example.com/path/stream.m3u8?token=abc', {});
-    expect(result).toContain('-i \'https://example.com/path/stream.m3u8?token=abc\'');
+    expect(result).toContain("-i 'https://example.com/path/stream.m3u8?token=abc'");
   });
 
   it('should place -i right after -readrate 4', () => {

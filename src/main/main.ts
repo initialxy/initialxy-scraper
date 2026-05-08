@@ -145,7 +145,9 @@ app.whenReady().then(async () => {
 
   const cliArgs = parseCLIArgs();
 
-  app.userAgentFallback = app.userAgentFallback.replace(app.getName(), '');
+  app.userAgentFallback = app.userAgentFallback
+    .replace(app.getName(), '')
+    .replace(/ Electron\/[\d.]+/, '');
 
   if (cliArgs.closeOnSelectorComplete && !cliArgs.selector) {
     console.error('[App] --close-on-selector-complete requires --selector');
