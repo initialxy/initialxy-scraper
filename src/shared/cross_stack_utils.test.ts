@@ -120,7 +120,7 @@ describe('generateFFmpegCommand', () => {
     const result = generateFFmpegCommand('https://example.com/stream.m3u8', {});
     expect(result).toContain('ffmpeg');
     expect(result).toContain('-allowed_extensions ALL');
-    expect(result).toContain('-i "https://example.com/stream.m3u8"');
+    expect(result).toContain("-i 'https://example.com/stream.m3u8'");
     expect(result).toContain('out.mp4');
   });
 
@@ -164,15 +164,15 @@ describe('generateFFmpegCommand', () => {
 
   it('should include URL in input flag', () => {
     const result = generateFFmpegCommand('https://example.com/path/stream.m3u8?token=abc', {});
-    expect(result).toContain('-i "https://example.com/path/stream.m3u8?token=abc"');
+    expect(result).toContain('-i \'https://example.com/path/stream.m3u8?token=abc\'');
   });
 
-  it('should place -i right after -readrate 2', () => {
+  it('should place -i right after -readrate 4', () => {
     const result = generateFFmpegCommand('https://example.com/stream.m3u8', {
       Cookie: 'session=abc123',
     });
     const readrateIdx = result.indexOf('-readrate 4');
-    const inputIdx = result.indexOf('-i "');
+    const inputIdx = result.indexOf("-i '");
     const headersIdx = result.indexOf('-headers');
     expect(readrateIdx).toBeGreaterThan(-1);
     expect(inputIdx).toBeGreaterThan(-1);

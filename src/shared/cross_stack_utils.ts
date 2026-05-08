@@ -32,5 +32,5 @@ export function generateFFmpegCommand(url: string, headers: Record<string, strin
     .map(([k, v]) => `-headers "${escapeCurl(k)}: ${escapeCurl(v)}"`)
     .join(' ');
 
-  return `ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -extension_picky 0 -readrate 4 -i "${url}" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 300000000 ${headersStr} -acodec copy -bsf:a aac_adtstoasc -vcodec copy out.mp4`;
+  return `ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -extension_picky 0 -readrate 4 -i '${url}' -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 300000000 ${headersStr} -acodec copy -bsf:a aac_adtstoasc -vcodec copy out.mp4`;
 }
