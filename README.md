@@ -17,7 +17,7 @@ Additionally, I wanted to use this exercise to play with a **fully local** vibe 
 ## Features
 
 - **No DevTools, Debugger or Automation activation**: Avoid detection by modern anti-scraping solutions
-- **Network Monitor UI**: Real-time network request monitoring in a split-panel interface (500px right panel) with one-click cURL/ffmpeg copy
+- **Network Monitor UI**: Real-time network request monitoring in a separate 500×600px window with one-click cURL/ffmpeg copy
 - **CLI Scraping Automation**: Automated bulk scraping with another script without Chrome Driver or Remote Debugger.
 - **Advanced Filters**: Not only can you filter by URL patterns, but also use CSS selector on the page source to find targeted elements and extract their sources while preserving order based on DOM structure. Responses matching current page state are saved immediately; others are buffered until page source updates.
 - **Automatic Scrolling**: Scroll automatically at a customized speed to defeat lazy loading or infinite scrolling elements.
