@@ -18,13 +18,15 @@ import path from 'node:path';
 import type { CLIArgs, WebViewInterface } from '../shared/types.ts';
 
 let webView: WebContentsView | null = null;
-let uiView: WebContentsView | null = null;
 let coordinator: Coordinator | null = null;
+let monitorWin: BaseWindow | null = null;
 
 function createWindow(cliArgs: CLIArgs): {
   win: BaseWindow;
+  monitorWin: BaseWindow;
   webViewInterface: WebViewInterface;
 } {
+  // Main window - full size, no side panel
   const win = new BaseWindow({
     width: cliArgs.width ?? 1200,
     height: cliArgs.height ?? 1000,
@@ -41,6 +43,15 @@ function createWindow(cliArgs: CLIArgs): {
 
   win.contentView.addChildView(webView);
   webView.setVisible(true);
+
+  // Set webView to full window size on show/focus/resize
+  const updateBounds = () => {
+    const [w, h] = win.getContentSize();
+    webView?.setBounds({ x: 0, y: 0, width: w, height: h });
+  };
+  win.on('show', updateBounds);
+  win.on('focus', updateBounds);
+  win.on('resize', updateBounds);
 
   webView!.webContents.loadURL('about:blank');
 
@@ -73,7 +84,14 @@ function createWindow(cliArgs: CLIArgs): {
     }
   });
 
-  uiView = new WebContentsView({
+  // Monitor window - separate window for Network Monitor UI
+  monitorWin = new BaseWindow({
+    width: 500,
+    height: 600,
+    autoHideMenuBar: true,
+  });
+
+  const monitorView = new WebContentsView({
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -82,37 +100,30 @@ function createWindow(cliArgs: CLIArgs): {
     },
   });
 
-  win.contentView.addChildView(uiView);
-  uiView.setVisible(true);
+  monitorWin.contentView.addChildView(monitorView);
+  monitorView.setVisible(true);
+
+  // Set monitorView to full window size
+  const updateMonitorBounds = () => {
+    const [w, h] = monitorWin.getContentSize();
+    monitorView.setBounds({ x: 0, y: 0, width: w, height: h });
+  };
+  monitorWin.on('show', updateMonitorBounds);
+  monitorWin.on('focus', updateMonitorBounds);
+  monitorWin.on('resize', updateMonitorBounds);
 
   const uiPath = path.join(
     path.dirname(new URL(import.meta.url).pathname),
     '../renderer/ui/ui_panel.html'
   );
-  uiView.webContents.loadFile(uiPath);
+  monitorView.webContents.loadFile(uiPath);
 
-  const RIGHT_PANEL_WIDTH = 500;
-
-  const setupViewBounds = () => {
-    const [width, height] = win.getContentSize();
-    if (!webView || !uiView) return;
-    webView.setBounds({
-      x: 0,
-      y: 0,
-      width: width - RIGHT_PANEL_WIDTH,
-      height: height,
-    });
-    uiView.setBounds({
-      x: width - RIGHT_PANEL_WIDTH,
-      y: 0,
-      width: RIGHT_PANEL_WIDTH,
-      height: height,
-    });
-  };
-
-  win.on('show', setupViewBounds);
-  win.on('focus', setupViewBounds);
-  win.on('resize', setupViewBounds);
+  // Close monitor when main window closes
+  win.on('closed', () => {
+    if (monitorWin && !monitorWin.isDestroyed()) {
+      monitorWin.close();
+    }
+  });
 
   ipcMain.handle('copy-to-clipboard', (_event, text) => {
     clipboard.writeText(text);
@@ -126,11 +137,11 @@ function createWindow(cliArgs: CLIArgs): {
 
   const webViewInterface: WebViewInterface = {
     webContents: webView.webContents,
-    webContentsView: uiView!
-      .webContents as unknown as import('../shared/types.ts').UiPanelInterface,
+    webContentsView:
+      monitorView.webContents as unknown as import('../shared/types.ts').UiPanelInterface,
   };
 
-  return { win, webViewInterface };
+  return { win, monitorWin, webViewInterface };
 }
 
 app.whenReady().then(async () => {
@@ -154,7 +165,8 @@ app.whenReady().then(async () => {
     process.exit(1);
   }
 
-  const { win, webViewInterface } = createWindow(cliArgs);
+  const { win, monitorWin: createdMonitorWin, webViewInterface } = createWindow(cliArgs);
+  monitorWin = createdMonitorWin;
 
   const automationManager = new AutomationManager({
     waitS: cliArgs.wait || 0,
@@ -205,6 +217,7 @@ app.whenReady().then(async () => {
   }
 
   win.show();
+  monitorWin?.show();
 
   app.on('activate', () => {
     if (BaseWindow.getAllWindows().length === 0) {

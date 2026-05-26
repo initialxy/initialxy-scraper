@@ -27,10 +27,17 @@ main.ts ──┬→ Window creation & lifecycle (Electron glue)
 **Window Structure**:
 
 ```
-BaseWindow (1200x1000)
-├─ WebContentsView (left, dynamic) - External URLs
-└─ WebContentsView (right, 500px) - Network Monitor UI
+Main Window (1200x1000)              Network Monitor Window (500x600)
+┌──────────────────────────┐         ┌────────────────────────┐
+│ WebContentsView (full)   │         │ WebContentsView        │
+│ - External URLs          │         │ - Network Monitor UI   │
+│ - outerWidth ≈ innerWidth│         │                        │
+└──────────────────────────┘         └────────────────────────┘
 ```
+
+**Detection Evasion**: Main window has no child panels, so `outerWidth - innerWidth ≈ 0` (passes anti-detection checks). Monitor window is independent — closing main window also closes monitor.
+
+**Window Lifecycle**: `createWindow()` returns `{ win, monitorWin, webViewInterface }`. Monitor window is created alongside main window and closed when main window closes (`win.on('closed')`).
 
 ---
 
@@ -258,6 +265,23 @@ npm run test:coverage
 **Full app initialization** (in main.ts):
 
 ```typescript
+const { win, monitorWin, webViewInterface } = createWindow(cliArgs);
+
+const automationManager = new AutomationManager({
+  waitS: cliArgs.wait || 0,
+  scrollIntervalS: cliArgs.scroll ? 1 : 0,
+  closeOnIdleTimeS: cliArgs.closeOnIdle || null,
+  onScrollRequested: async () => {
+    await webView?.webContents.executeJavaScript(`window.scrollBy(0, ${cliArgs.scroll});`);
+  },
+  onUpdateRequested: async () => {
+    await coordinator?.updatePageSource();
+  },
+  onCloseRequested: () => {
+    coordinator?.closeOnIdleTimeout();
+  },
+});
+
 const cookieStore = new CookieStore(path.join(userDataPath, 'cookies.db'));
 
 if (cliArgs.clearCookies) {
@@ -281,6 +305,9 @@ coordinator = new Coordinator({
 });
 
 coordinator.init(cliArgs);
+
+win.show();
+monitorWin?.show();
 ```
 
 **ProtocolHandler instantiation** (standalone):

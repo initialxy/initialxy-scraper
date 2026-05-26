@@ -8,10 +8,12 @@ initialxy-scraper is a minimal Electron-based web browser designed for network m
 
 ## Architecture
 
-### Two-Panel Layout
+### Two-Window Layout
 
-1. **Left Panel (Web View)**: Full-height Chromium webview for page rendering
-2. **Right Panel (Network Monitor)**: 500px fixed-width panel showing real-time network requests
+1. **Main Window**: Full-width Chromium webview for page rendering (no side panels)
+2. **Network Monitor Window**: 500×600px independent window showing real-time network requests
+
+**Detection Evasion**: Main window has no child panels, so `outerWidth ≈ innerWidth`. This evades anti-detection checks that measure window chrome differences.
 
 ### No Traditional Browser UI
 
@@ -21,6 +23,7 @@ initialxy-scraper is a minimal Electron-based web browser designed for network m
 - No bookmarks or history UI
 - No extensions system
 - Window controls only (minimize, maximize, close)
+- Two independent windows (main + monitor), both frameless
 
 ### Single Tab Only
 
@@ -54,9 +57,9 @@ initialxy-scraper is a minimal Electron-based web browser designed for network m
 
 **Layout**:
 
-- Fixed 500px width, 100% height, positioned on right side
-- Web view takes remaining width
+- Independent 500×600px window (separate from main browsing window)
 - Dark theme only (no light mode)
+- Closes automatically when main window closes
 
 **Network Request List**:
 
@@ -248,10 +251,10 @@ Main Process
 │
 ├── main.ts - Electron Glue Code
 │   ├── Window Creation
-│   │   └── Single BaseWindow (no frame)
-│   │       └── Dual WebContentsView
-│   │           ├── Left: Dynamic webview (external URLs)
-│   │           └── Right: Fixed 500px panel (local HTML)
+│   │   ├── Main BaseWindow (no frame)
+│   │   │   └── Single WebContentsView (external URLs, full width)
+│   │   └── Monitor BaseWindow (no frame, 500×600)
+│   │       └── Single WebContentsView (local HTML, Network Monitor UI)
 │   ├── IPC Handlers (network-request-start/complete → Renderer)
 │   ├── CookieStore initialization
 │   └── Navigation events → coordinator
@@ -689,7 +692,7 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - Printer or print preview
 - Reader mode
 - Dark/Light theme toggle
-- Panel resize or reposition
+- Panel resize or reposition (panels are now separate windows)
 - Request/response body viewer in UI
 - HAR export
 - Performance metrics display
@@ -698,7 +701,7 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 
 - Config file for default settings
 - Multiple profile support
-- Panel width customization
+- Monitor window size customization
 - Request details sidebar
 - Response body preview (limited)
 - Filter by resource type
@@ -710,7 +713,8 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 
 ### Core Browser
 
-- [ ] Browser launches with two-panel layout (web view left, network panel right)
+- [ ] Browser launches with two independent windows (main + network monitor)
+- [ ] Main window has no side panels (outerWidth ≈ innerWidth for detection evasion)
 - [ ] No navbar, address bar, or traditional browser UI
 - [ ] Single webview, no tabs
 - [ ] User data stored in `./userdata/` directory
@@ -738,7 +742,8 @@ ffmpeg -allowed_extensions ALL -protocol_whitelist file,http,https,tcp,tls -exte
 - [ ] "Copy Page Source" button works with flash feedback
 - [ ] Panel auto-clears on page navigation
 - [ ] Dark theme matches minimal aesthetic
-- [ ] Panel is 500px wide, reduces webview width accordingly
+- [ ] Monitor window is 500×600px, independent from main window
+- [ ] Monitor window closes when main window closes
 
 ### CLI Scraping Mode
 
