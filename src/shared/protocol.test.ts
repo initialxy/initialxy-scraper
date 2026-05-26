@@ -454,6 +454,49 @@ describe('ProtocolHandler', () => {
     });
   });
 
+  describe('referrer forwarding', () => {
+    it('should forward request.referrer as Referer header', async () => {
+      let capturedHeaders: Record<string, string> = {};
+
+      const mockResponse = createMockResponse(200, {});
+      vi.spyOn(electron.net, 'fetch').mockImplementation(
+        async (_input: string | Request, init?: RequestInit) => {
+          capturedHeaders = init?.headers as Record<string, string>;
+          return mockResponse;
+        }
+      );
+
+      handler.register();
+
+      const request = new Request('https://example.com/test', {
+        method: 'GET',
+        referrer: 'https://referrer-site.com/page',
+      });
+      await callHandleRequest(handler, request);
+
+      expect(capturedHeaders).toHaveProperty('Referer', 'https://referrer-site.com/page');
+    });
+
+    it('should not add Referer header when referrer is empty', async () => {
+      let capturedHeaders: Record<string, string> = {};
+
+      const mockResponse = createMockResponse(200, {});
+      vi.spyOn(electron.net, 'fetch').mockImplementation(
+        async (_input: string | Request, init?: RequestInit) => {
+          capturedHeaders = init?.headers as Record<string, string>;
+          return mockResponse;
+        }
+      );
+
+      handler.register();
+
+      const request = new Request('https://example.com/test', { method: 'GET' });
+      await callHandleRequest(handler, request);
+
+      expect(capturedHeaders).not.toHaveProperty('Referer');
+    });
+  });
+
   describe('request ID tracking', () => {
     it('should increment request ID for each request', async () => {
       vi.spyOn(electron.net, 'fetch').mockImplementation(async () => createMockResponse(200, {}));

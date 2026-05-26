@@ -78,6 +78,10 @@ export class ProtocolHandler {
       headersObj['Cookie'] = cookies;
     }
 
+    if (request.referrer && request.referrer !== 'about:client') {
+      headersObj['Referer'] = request.referrer;
+    }
+
     // Prevent infinite recursion
     if (this.inFlight.has(url)) {
       const response = await fetch(url, {
