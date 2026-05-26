@@ -111,6 +111,8 @@ function createWindow(cliArgs: CLIArgs): {
   monitorWin.on('show', updateMonitorBounds);
   monitorWin.on('focus', updateMonitorBounds);
   monitorWin.on('resize', updateMonitorBounds);
+  // WM may resize window after show(); retry once to catch forced size
+  setTimeout(updateMonitorBounds, 300);
 
   const uiPath = path.join(
     path.dirname(new URL(import.meta.url).pathname),
