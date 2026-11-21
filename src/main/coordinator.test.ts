@@ -23,6 +23,7 @@ const mockAutomationState = vi.hoisted(() => ({
 
 const mockOutputManagerState = vi.hoisted(() => ({
   initCalls: [] as unknown[],
+  updateSourceUrlsCalls: [] as string[][],
 }));
 
 vi.mock('../shared/protocol.ts', () => ({
@@ -53,7 +54,9 @@ vi.mock('../shared/output_manager.ts', () => ({
       mockOutputManagerState.initCalls.push(options);
     }
     responseCompleted() {}
-    updatePageSource() {}
+    updateSourceUrls(urls: string[]) {
+      mockOutputManagerState.updateSourceUrlsCalls.push(urls);
+    }
     hasPendingSelectorFiles() {
       return false;
     }
@@ -70,9 +73,7 @@ const MockAutomationManager = (await import('../shared/automation.ts')).Automati
 ) => MockAutomationClass;
 
 function createMockWebView() {
-  const executeJavaScriptMock = vi
-    .fn<() => Promise<string>>()
-    .mockResolvedValue('<html><body></body></html>');
+  const executeJavaScriptMock = vi.fn<(code: string) => Promise<string>>().mockResolvedValue('[]');
   const getURLMock = vi.fn<() => string>().mockReturnValue('about:blank');
   const sendMock = vi.fn<(channel: string, ...args: unknown[]) => void>();
   const webView = {
@@ -110,7 +111,7 @@ describe('Coordinator', () => {
   let mockWebView: {
     webView: import('../shared/types.ts').WebViewInterface;
     getURLMock: ReturnType<typeof vi.fn<() => string>>;
-    executeJavaScriptMock: ReturnType<typeof vi.fn<() => Promise<string>>>;
+    executeJavaScriptMock: ReturnType<typeof vi.fn<(code: string) => Promise<string>>>;
     sendMock: ReturnType<typeof vi.fn<(channel: string, ...args: unknown[]) => void>>;
   };
   let mockProcessExit: ReturnType<typeof createMockProcessExit>;
@@ -124,6 +125,8 @@ describe('Coordinator', () => {
     mockAutomationState.startCalls = 0;
     mockAutomationState.onOutputEventCalls = 0;
     mockAutomationState.instances = [];
+    mockOutputManagerState.initCalls = [];
+    mockOutputManagerState.updateSourceUrlsCalls = [];
 
     // Capture ALL process.exit calls
     exitCalls = [];
@@ -270,8 +273,32 @@ describe('Coordinator', () => {
     });
   });
 
-  describe('updatePageSource', () => {
-    it('should execute JavaScript and pass result to OutputManager', async () => {
+  describe('updateSourceUrls', () => {
+    it('should execute extraction JS and pass parsed URLs to OutputManager when selector set', async () => {
+      mockWebView.executeJavaScriptMock.mockResolvedValue(
+        JSON.stringify(['https://example.com/a.jpg', 'https://example.com/b.jpg'])
+      );
+
+      const coordinator = new Coordinator({
+        protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
+        automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
+        webView: mockWebView.webView,
+      });
+
+      coordinator.init({ selector: '.page' });
+
+      await coordinator.updateSourceUrls();
+
+      expect(mockWebView.executeJavaScriptMock).toHaveBeenCalledTimes(1);
+      const code = mockWebView.executeJavaScriptMock.mock.calls[0][0];
+      expect(code).toContain('".page"');
+      expect(code).toContain('querySelectorAll');
+      expect(mockOutputManagerState.updateSourceUrlsCalls).toEqual([
+        ['https://example.com/a.jpg', 'https://example.com/b.jpg'],
+      ]);
+    });
+
+    it('should not execute extraction JS when no selector is set', async () => {
       const coordinator = new Coordinator({
         protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
         automationManager: new MockAutomationManager() as unknown as AutomationManagerInterface,
@@ -280,11 +307,10 @@ describe('Coordinator', () => {
 
       coordinator.init({});
 
-      await coordinator.updatePageSource();
+      await coordinator.updateSourceUrls();
 
-      expect(mockWebView.executeJavaScriptMock).toHaveBeenCalledWith(
-        'document.documentElement.outerHTML'
-      );
+      expect(mockWebView.executeJavaScriptMock).not.toHaveBeenCalled();
+      expect(mockOutputManagerState.updateSourceUrlsCalls).toEqual([]);
     });
 
     it('should return early if outputManager is not initialized', async () => {
@@ -294,7 +320,7 @@ describe('Coordinator', () => {
         webView: mockWebView.webView,
       });
 
-      await coordinator.updatePageSource();
+      await coordinator.updateSourceUrls();
 
       expect(mockWebView.executeJavaScriptMock).not.toHaveBeenCalled();
     });
@@ -309,11 +335,13 @@ describe('Coordinator', () => {
         webView: mockWebView.webView,
       });
 
-      coordinator.init({});
+      coordinator.init({ selector: 'img' });
 
-      await coordinator.updatePageSource();
+      await coordinator.updateSourceUrls();
 
       expect(consoleError).toHaveBeenCalled();
+      // sourceUrls must be left unchanged on failure
+      expect(mockOutputManagerState.updateSourceUrlsCalls).toEqual([]);
     });
 
     it('should close with success when selector files are complete and no scroll', async () => {
@@ -328,16 +356,14 @@ describe('Coordinator', () => {
         closeOnSelectorComplete: true,
       });
 
-      await coordinator.updatePageSource();
+      await coordinator.updateSourceUrls();
 
       expect(exitCalls).toHaveLength(1);
       expect(exitCalls[0].code).toBe(EXIT_CODES.success);
     });
 
     it('should check scroll position when scroll is enabled', async () => {
-      mockWebView.executeJavaScriptMock
-        .mockResolvedValueOnce('true')
-        .mockResolvedValueOnce('false');
+      mockWebView.executeJavaScriptMock.mockResolvedValueOnce('[]').mockResolvedValueOnce('false');
 
       const coordinator = new Coordinator({
         protocolHandler: new MockProtocolHandler() as unknown as ProtocolHandlerInterface,
@@ -351,7 +377,7 @@ describe('Coordinator', () => {
         closeOnSelectorComplete: true,
       });
 
-      await coordinator.updatePageSource();
+      await coordinator.updateSourceUrls();
 
       expect(mockWebView.executeJavaScriptMock).toHaveBeenCalledTimes(2);
     });

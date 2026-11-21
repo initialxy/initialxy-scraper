@@ -7,6 +7,32 @@ import type {
   AutomationManagerInterface,
 } from '../shared/types.ts';
 
+/**
+ * Build the page-side script that extracts expected image URLs for a CSS
+ * selector. For each matched element (in DOM order) it resolves, best effort:
+ *   1. `el.src` (property, absolute for `<img>` etc.)
+ *   2. `data-src` attribute
+ *   3. computed `background-image` — first non-`data:` `url(...)` token
+ * Returns `JSON.stringify(string[])`; elements that yield no URL are skipped
+ * (compact indexing).
+ */
+export function buildSourceUrlExtractionScript(selector: string): string {
+  return `(() => {
+  const selector = ${JSON.stringify(selector)};
+  const urls = [];
+  document.querySelectorAll(selector).forEach((el) => {
+    let url = el.src || el.getAttribute('data-src');
+    if (!url) {
+      const backgroundImage = getComputedStyle(el).backgroundImage;
+      const match = backgroundImage && backgroundImage.match(/url\\((["']?)(?!data:)([^"')]+)\\1\\)/);
+      if (match) url = match[2];
+    }
+    if (url) urls.push(url);
+  });
+  return JSON.stringify(urls);
+})()`;
+}
+
 export class Coordinator {
   private protocolHandler: ProtocolHandlerInterface;
   private automationManager: AutomationManagerInterface;
@@ -84,16 +110,19 @@ export class Coordinator {
     this.outputManager?.responseCompleted(request, response);
   }
 
-  async updatePageSource(): Promise<void> {
+  async updateSourceUrls(): Promise<void> {
     if (!this.outputManager) return;
 
-    try {
-      const pageSource = await this.webView.webContents.executeJavaScript(
-        'document.documentElement.outerHTML'
-      );
-      this.outputManager.updatePageSource(pageSource);
-    } catch (error) {
-      console.error('[Main] Error getting page source:', error);
+    if (this.cliArgs.selector) {
+      try {
+        const result = await this.webView.webContents.executeJavaScript(
+          buildSourceUrlExtractionScript(this.cliArgs.selector)
+        );
+        const sourceUrls = (typeof result === 'string' ? JSON.parse(result) : []) as string[];
+        this.outputManager.updateSourceUrls(sourceUrls);
+      } catch (error) {
+        console.error('[Main] Error extracting source URLs:', error);
+      }
     }
 
     if (this.cliArgs.closeOnSelectorComplete && !this.outputManager.hasPendingSelectorFiles()) {

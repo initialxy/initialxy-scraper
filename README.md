@@ -19,7 +19,7 @@ Additionally, I wanted to use this exercise to play with a **fully local** vibe 
 - **No DevTools, Debugger or Automation activation**: Avoid detection by modern anti-scraping solutions
 - **Network Monitor UI**: Real-time network request monitoring in a separate 500×600px window with one-click cURL/ffmpeg copy
 - **CLI Scraping Automation**: Automated bulk scraping with another script without Chrome Driver or Remote Debugger.
-- **Advanced Filters**: Not only can you filter by URL patterns, but also use CSS selector on the page source to find targeted elements and extract their sources while preserving order based on DOM structure. Responses matching current page state are saved immediately; others are buffered until page source updates.
+- **Advanced Filters**: Not only can you filter by URL patterns, but also use CSS selectors to find targeted elements and extract their image URLs while preserving order based on DOM structure. Per element the source is resolved best-effort: `src` → `data-src` → computed `background-image` (useful for pages that render images as CSS backgrounds). Responses matching current page state are saved immediately; others are buffered until the page is re-extracted.
 - **Automatic Scrolling**: Scroll automatically at a customized speed to defeat lazy loading or infinite scrolling elements.
 - **Close on idle**: Automatically exit the process after a period of inactivity, which allows coordination script to move on to the next URL in a bulk process without having to inspect browser behavior.
 - **Persistent Cookie Storage**: Cookies are stored in SQLite (`userdata/cookies.db`) and survive app restarts, enabling multi-session scraping workflows. Use `--clear-cookies` to wipe the database.
@@ -83,7 +83,7 @@ npm start -- --clear-cookies --output-dir ./fresh https://initialxy.com
 | `--output-dir`      | `-o`      | string | Output directory for scraped responses (auto-created)                                       |
 | `--output-curl`     | -         | bool   | Output cURL commands to stdout                                                              |
 | `--filter`          | `-f`      | string | Regex URL filter (applies to both --output-dir and --output-curl)                           |
-| `--selector`        | `-s`      | string | CSS selector to extract src attributes from DOM                                             |
+| `--selector`        | `-s`      | string | CSS selector; per match extract image URL from `src`, `data-src`, or computed background-image |
 | `--wait`            | `-w`      | number | Wait seconds after app start before triggering page source update, auto-scroll, and idle timer |
 | `--scroll`          | `-r`      | number | Pixels to scroll down every second (omit to disable scrolling)                              |
 | `--close-on-idle`   | `-c`      | number | Seconds of idle time before auto-close                                                      |

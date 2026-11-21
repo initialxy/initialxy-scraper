@@ -9,7 +9,6 @@ import { generateCurl, generateFFmpegCommand, isM3u8 } from './cross_stack_utils
 import { RESPONSE_WITHOUT_BODY, EXIT_CODES } from './constants.ts';
 import fs from 'node:fs';
 import path from 'node:path';
-import { JSDOM } from 'jsdom';
 
 interface ResponseData {
   request: {
@@ -70,8 +69,19 @@ export class OutputManager {
     }
   }
 
-  updatePageSource(pageSource: string): void {
-    this.sourceUrls = this.extractSourceUrlsFromSource(pageSource);
+  /**
+   * Update the set of expected source URLs, extracted from the live page
+   * (see Coordinator). Each URL is normalized against the base URL and mapped
+   * to its index (compact: only matches that yielded a URL contribute). The
+   * index is used as the sequence number for `--rename-sequence`.
+   */
+  updateSourceUrls(sourceUrls: string[]): void {
+    const urlMap = new Map<string, number>();
+    sourceUrls.forEach((rawUrl, i) => {
+      const normalizedUrl = normalizeUrlWithBase(this.baseUrl, rawUrl);
+      urlMap.set(normalizedUrl, i);
+    });
+    this.sourceUrls = urlMap;
 
     if (this.unprocessedResponses.length === 0) {
       return;
@@ -82,34 +92,6 @@ export class OutputManager {
     });
 
     this.unprocessedResponses = [];
-  }
-
-  private extractSourceUrlsFromSource(pageSource: string): Map<string, number> {
-    if (!this.selector) {
-      return new Map<string, number>();
-    }
-
-    const dom = new JSDOM(pageSource);
-    const document = dom.window.document;
-    const elements = document.querySelectorAll(this.selector);
-    const sourceUrls = new Map<string, number>();
-
-    elements.forEach((el, i) => {
-      const element = el as HTMLElement & {
-        src?: string;
-        dataset?: { src?: string };
-      };
-
-      if (element.src) {
-        const normalizedUrl = normalizeUrlWithBase(this.baseUrl, element.src);
-        sourceUrls.set(normalizedUrl, i);
-      } else if (element.dataset?.src) {
-        const normalizedUrl = normalizeUrlWithBase(this.baseUrl, element.dataset.src);
-        sourceUrls.set(normalizedUrl, i);
-      }
-    });
-
-    return sourceUrls;
   }
 
   private isEligible(url: string, sourceUrls: Map<string, number>): boolean {

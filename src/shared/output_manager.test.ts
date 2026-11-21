@@ -106,9 +106,8 @@ describe('OutputManager', () => {
         onOutput: mockOnOutput,
       });
 
-      // First update page source to set up sourceUrls
-      const pageSource = '<img src="https://example.com/existing.jpg">';
-      manager.updatePageSource(pageSource);
+      // First update source URLs to set up sourceUrls
+      manager.updateSourceUrls(['https://example.com/existing.jpg']);
 
       // Now a response comes in that matches the current sourceUrls
       manager.responseCompleted(
@@ -146,8 +145,8 @@ describe('OutputManager', () => {
     });
   });
 
-  describe('updatePageSource', () => {
-    it('should process buffered responses when page source matches selector', () => {
+  describe('updateSourceUrls', () => {
+    it('should process buffered responses when URL list matches selector', () => {
       manager = new OutputManager({
         baseUrl: 'https://example.com',
         selector: 'img',
@@ -161,9 +160,8 @@ describe('OutputManager', () => {
         { statusCode: 200, body: Buffer.from('test'), headers: {} }
       );
 
-      // Update with matching page source
-      const pageSource = '<img src="https://example.com/image.jpg">';
-      manager.updatePageSource(pageSource);
+      // Update with matching URL list
+      manager.updateSourceUrls(['https://example.com/image.jpg']);
 
       expect(mockOnOutput).toHaveBeenCalledWith('https://example.com/image.jpg');
       // Verify curl command was output
@@ -180,31 +178,30 @@ describe('OutputManager', () => {
         onOutput: mockOnOutput,
       });
 
-      // Buffer a response for a URL not in page source
+      // Buffer a response for a URL not in the URL list
       manager.responseCompleted(
-        { url: 'https://example.com/not-in-page.jpg', method: 'GET', headers: {} },
+        { url: 'https://example.com/not-in-list.jpg', method: 'GET', headers: {} },
         { statusCode: 200, body: Buffer.from('test'), headers: {} }
       );
 
-      const pageSource = '<img src="https://example.com/other.jpg">';
-      manager.updatePageSource(pageSource);
+      manager.updateSourceUrls(['https://example.com/other.jpg']);
 
       // Should NOT call onOutput since URL doesn't match
       expect(mockOnOutput).not.toHaveBeenCalled();
     });
 
-    it('should handle empty page source', () => {
+    it('should handle empty URL list', () => {
       manager = new OutputManager({
         baseUrl: 'https://example.com',
         selector: 'img',
         onOutput: mockOnOutput,
       });
 
-      manager.updatePageSource('');
+      manager.updateSourceUrls([]);
       expect(mockOnOutput).not.toHaveBeenCalled();
     });
 
-    it('should extract from data-src attribute', () => {
+    it('should normalize relative URLs against the base URL', () => {
       manager = new OutputManager({
         baseUrl: 'https://example.com',
         selector: 'img',
@@ -217,8 +214,8 @@ describe('OutputManager', () => {
         { statusCode: 200, body: Buffer.from('test'), headers: {} }
       );
 
-      const pageSource = '<img data-src="https://example.com/lazy.jpg">';
-      manager.updatePageSource(pageSource);
+      // e.g. data-src="lazy.jpg" from the page, relative to the document
+      manager.updateSourceUrls(['lazy.jpg']);
 
       expect(mockOnOutput).toHaveBeenCalledWith('https://example.com/lazy.jpg');
       // Verify curl command was output
@@ -279,8 +276,7 @@ describe('OutputManager', () => {
         { statusCode: 200, body: Buffer.from('test'), headers: {} }
       );
 
-      const pageSource = '<img src="https://example.com/test.jpg">';
-      manager.updatePageSource(pageSource);
+      manager.updateSourceUrls(['https://example.com/test.jpg']);
 
       expect(mockOnOutput).toHaveBeenCalledWith('https://example.com/test.jpg');
       expect(mockStdoutWrite).toHaveBeenCalled();
@@ -373,12 +369,8 @@ describe('OutputManager', () => {
         onAllSelectorFilesSaved: mockOnAllSelectorFilesSaved,
       });
 
-      // Update page source to set up sourceUrls with 2 images
-      const pageSource = `
-        <img src="https://example.com/img1.jpg">
-        <img src="https://example.com/img2.jpg">
-      `;
-      manager.updatePageSource(pageSource);
+      // Update source URLs with 2 images
+      manager.updateSourceUrls(['https://example.com/img1.jpg', 'https://example.com/img2.jpg']);
 
       // Save first image
       manager.responseCompleted(
@@ -425,9 +417,8 @@ describe('OutputManager', () => {
         onAllSelectorFilesSaved: mockOnAllSelectorFilesSaved,
       });
 
-      // Update page source with no matching images
-      const pageSource = '<div>No images here</div>';
-      manager.updatePageSource(pageSource);
+      // Update with an empty URL list (no matching images)
+      manager.updateSourceUrls([]);
 
       // Callback should not be called (sourceUrls is empty)
       expect(mockOnAllSelectorFilesSaved).not.toHaveBeenCalled();
@@ -442,8 +433,7 @@ describe('OutputManager', () => {
         // No onAllSelectorFilesSaved callback
       });
 
-      const pageSource = '<img src="https://example.com/img.jpg">';
-      manager.updatePageSource(pageSource);
+      manager.updateSourceUrls(['https://example.com/img.jpg']);
 
       manager.responseCompleted(
         { url: 'https://example.com/img.jpg', method: 'GET', headers: {} },
@@ -464,12 +454,8 @@ describe('OutputManager', () => {
         onOutput: mockOnOutput,
       });
 
-      // Update page source to set up sourceUrls with 2 images
-      const pageSource = `
-        <img src="https://example.com/img1.jpg">
-        <img src="https://example.com/img2.jpg">
-      `;
-      manager.updatePageSource(pageSource);
+      // Update source URLs with 2 images
+      manager.updateSourceUrls(['https://example.com/img1.jpg', 'https://example.com/img2.jpg']);
 
       // Both files are pending (not yet saved)
       expect(manager.hasPendingSelectorFiles()).toBe(true);
@@ -511,11 +497,11 @@ describe('OutputManager', () => {
         onOutput: mockOnOutput,
       });
 
-      // No page source update yet
+      // No source URL update yet
       expect(manager.hasPendingSelectorFiles()).toBe(false);
 
-      // Empty page source
-      manager.updatePageSource('<div>No images</div>');
+      // Empty URL list
+      manager.updateSourceUrls([]);
       expect(manager.hasPendingSelectorFiles()).toBe(false);
     });
 
@@ -527,9 +513,8 @@ describe('OutputManager', () => {
         onOutput: mockOnOutput,
       });
 
-      // Update page source
-      const pageSource = '<img src="https://example.com/img.jpg">';
-      manager.updatePageSource(pageSource);
+      // Update source URLs
+      manager.updateSourceUrls(['https://example.com/img.jpg']);
 
       // Immediately save the file
       manager.responseCompleted(

@@ -80,7 +80,7 @@ function createWindow(cliArgs: CLIArgs): {
     );
 
     if (cliArgs.selector && !cliArgs.wait) {
-      await coordinator?.updatePageSource();
+      await coordinator?.updateSourceUrls();
     }
   });
 
@@ -178,7 +178,7 @@ app.whenReady().then(async () => {
       await webView?.webContents.executeJavaScript(`window.scrollBy(0, ${cliArgs.scroll});`);
     },
     onUpdateRequested: async () => {
-      await coordinator?.updatePageSource();
+      await coordinator?.updateSourceUrls();
     },
     onCloseRequested: () => {
       coordinator?.closeOnIdleTimeout();

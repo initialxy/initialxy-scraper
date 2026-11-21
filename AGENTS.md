@@ -50,7 +50,8 @@ Main Window (1200x1000)              Network Monitor Window (500x600)
 - **Methods**:
   - `init(cliArgs)` - Creates OutputManager, sets up ProtocolHandler callbacks, registers protocol handler, starts AutomationManager
   - `responseCompleted(request, response)` - Forwards to OutputManager
-  - `updatePageSource()` - Executes JS on webContents, passes to OutputManager, handles close-on-selector-complete logic
+  - `updateSourceUrls()` - Runs `buildSourceUrlExtractionScript(selector)` on webContents via `executeJavaScript`, parses the returned JSON URL array, passes to OutputManager, handles close-on-selector-complete logic (no-op without `--selector`)
+- Also exports `buildSourceUrlExtractionScript(selector)` — page-side IIFE that, per selector-matched element (DOM order; only elements yielding a URL contribute, compact indexing), resolves `el.src` (property, absolute) → `data-src` attr → computed `background-image` (first non-`data:` `url(...)` token), returning `JSON.stringify(string[])`. Selector injected via `JSON.stringify`; page errors propagate to Node where `sourceUrls` is left unchanged
   - `closeOnIdleTimeout()` - Determines exit code and calls `process.exit()`
   - `closeOnSelectorCheck()` - Checks if all selector files saved, handles scroll-at-bottom check
 - **NO direct Electron access** - delegates to injected `webView` and `automationManager`
@@ -63,7 +64,7 @@ Main Window (1200x1000)              Network Monitor Window (500x600)
 - WebContents access (ONLY module with direct access)
 - IPC handlers for renderer communication
 - Navigation events → coordinator
-- Exports: none (coordinator is module-level singleton)
+- Exports: none (coordinator is a module-level singleton; `buildSourceUrlExtractionScript` is exported from `coordinator.ts`)
 
 ### CookieStore (`src/shared/cookie_store.ts`)
 
@@ -88,7 +89,7 @@ Main Window (1200x1000)              Network Monitor Window (500x600)
 
 - Filtering, buffering, file/console output
 - `responseCompleted()` - processes immediately if URL matches current `sourceUrls`, otherwise buffers
-- `updatePageSource()` - updates `sourceUrls` from page source, processes buffered responses
+- `updateSourceUrls(urls: string[])` - normalizes each URL against `baseUrl`, maps to compact index (sequence for `--rename-sequence`), processes buffered responses. Extraction happens in the live page (Coordinator) — no JSDOM in this module
 - Callback: `onOutput(url)` to reset idle timer
 - Callback: `onAllSelectorFilesSaved()` when all selector-matched files are saved
 - `hasPendingSelectorFiles()` - returns true if there are expected selector files that haven't been saved yet
@@ -121,10 +122,10 @@ Main Window (1200x1000)              Network Monitor Window (500x600)
 
 | Test File | Tests | Key Coverage |
 |-----------|-------|--------------|
-| `src/main/coordinator.test.ts` | 20 | Constructor, init (OutputManager creation, callback wiring, register, start), responseCompleted, updatePageSource (JS execution, error handling, selector completion, scroll position), closeOnIdleTimeout, closeOnSelectorCheck, callback wiring |
+| `src/main/coordinator.test.ts` | 21 | Constructor, init (OutputManager creation, callback wiring, register, start), responseCompleted, updateSourceUrls (in-page JS execution, selector gating, error handling, selector completion, scroll position), closeOnIdleTimeout, closeOnSelectorCheck, callback wiring |
 | `src/shared/protocol.test.ts` | 31 | Constructor, register, setCallbacks, handleRequest (normal flow, method/headers forwarding, 204 null body), inFlight tracking, cookie handling (get/set, expiration, secure, httponly, samesite, domain, malformed), request ID tracking, response headers forwarding, storeCookies edge cases, getCookiesForUrl error handling |
 | `src/shared/cookie_store.test.ts` | 15 | Constructor, save/load (single + batch), replace by key, expire session cookies, expire past-expiration, domain filtering, deleteByDomain, clear, sameSite handling, cleanup (session + expired), directory creation |
-| `src/shared/output_manager.test.ts` | 20 | Constructor, responseCompleted (immediate processing + buffering), updatePageSource, filtering, file writing, curl/ffmpeg command generation, onAllSelectorFilesSaved callback |
+| `src/shared/output_manager.test.ts` | 25 | Constructor, responseCompleted (immediate processing + buffering), updateSourceUrls (incl. relative-URL normalization), filtering, file writing, curl/ffmpeg command generation, onAllSelectorFilesSaved callback |
 | `src/shared/automation.test.ts` | 12 | Constructor, start, scroll logic, idle timer, onOutputEvent |
 | `src/shared/backend_utils.test.ts` | 17 | normalizeFilename (pathname extraction, root default, no extension, query params, directory structure), normalizeFlatFilename (basename only), generateSequentialFilename (zero-padding, widths, extension preservation), normalizeUrlWithBase (relative resolution, absolute override, error fallback) |
 | `src/shared/cross_stack_utils.test.ts` | 28 | escapeCurl (quotes, backticks, dollar signs, special chars, empty), generateCurl (basic, headers, continuation, escaping, methods), isM3u8 (extension, case-insensitive, query params, edge cases), generateFFmpegCommand (basic, headers, flags, escaping, URL input) |
@@ -153,7 +154,7 @@ npm run test:coverage     # Coverage report
 | `src/shared/cookie_store.ts`      | Persistent cookie storage (SQLite)      |
 | `src/shared/output_manager.ts`    | Filtering, buffering, output            |
 | `src/shared/automation.ts`        | Timing automation                       |
-| `src/shared/backend_utils.ts`     | Node.js utilities (jsdom, path)         |
+| `src/shared/backend_utils.ts`     | Node.js utilities (path, URL)           |
 | `src/shared/cross_stack_utils.ts` | Shared functions (generateCurl, isM3u8) |
 | `src/shared/cli.ts`               | CLI argument parsing                    |
 | `src/shared/types.ts`             | TypeScript interfaces                   |
@@ -166,11 +167,11 @@ npm run test:coverage     # Coverage report
 1. **Protocol Handler Timing**: Load `about:blank` → register handler → navigate to URL
 2. **Cookie Management**: ProtocolHandler retrieves cookies from webContents session for requests and stores cookies from `Set-Cookie` responses. Cookies are persisted to SQLite (`userdata/cookies.db`) via CookieStore for durability across restarts.
 3. **Infinite Recursion Prevention**: `inFlight` Set tracks URLs currently being processed; `net.fetch()` bypasses custom protocol handlers
-4. **Selector Buffering**: OutputManager buffers responses until `updatePageSource()` called
+4. **Selector Buffering**: OutputManager buffers responses until `updateSourceUrls()` called
 5. **Page Source Updates**: Triggered by `--wait` completion, `--scroll` intervals, or `did-finish-load` (when `--selector` set without `--wait`)
 6. **Exit codes defined in constants.ts**
 7. **RESPONSE_WITHOUT_BODY**: Set([204, 304]) for clean status code handling
-8. **Source Extraction**: Only `src` and `data-src` attributes are checked (not `srcset`)
+8. **Source Extraction**: Per selector-matched element, best effort: `el.src` (property, absolute) → `data-src` attribute → computed `background-image` (first non-`data:` `url(...)` token; handles `background` shorthands and multi-layer lists). Extracted in the live page via `executeJavaScript` (real CSS engine) — JSDOM was removed because its CSS parser corrupts `background` shorthands and it cannot resolve external stylesheets. `srcset` is not checked. Compound selectors are the user's tool (e.g. `.reader__page:not(:has(img)), .reader__page img` avoids double-matching img-backed pages). Indexing is compact: position among matches that yield a URL. Page-side errors (e.g. invalid selector) propagate; `sourceUrls` is left unchanged
 9. **Cookie Persistence**: `node:sqlite` (built-in) used instead of `better-sqlite3` — no native compilation needed. `loadPersistedCookies()` called after ProtocolHandler creation to load cookies from SQLite into Electron session.
 10. **Wildcard Domain Handling**: Cookie domains with leading dots (e.g., `.example.com`) must be stripped before constructing URLs for `session.cookies.set()` / `session.cookies.get()`.
 11. **Clear Cookies Flag**: `--clear-cookies` calls `cookieStore.clear()` before `loadPersistedCookies()`, wiping the SQLite database.
@@ -275,7 +276,7 @@ const automationManager = new AutomationManager({
     await webView?.webContents.executeJavaScript(`window.scrollBy(0, ${cliArgs.scroll});`);
   },
   onUpdateRequested: async () => {
-    await coordinator?.updatePageSource();
+    await coordinator?.updateSourceUrls();
   },
   onCloseRequested: () => {
     coordinator?.closeOnIdleTimeout();
@@ -358,13 +359,22 @@ const manager = new OutputManager({
 });
 ```
 
-**Page source update** (inside Coordinator):
+**Source URL update** (inside Coordinator):
 
 ```typescript
-export async function updatePageSource(): Promise<void> {
-  if (!outputManager) return;
-  const source = await webView.webContents.executeJavaScript('document.documentElement.outerHTML');
-  outputManager.updatePageSource(source);
+async updateSourceUrls(): Promise<void> {
+  if (!this.outputManager) return;
+  if (this.cliArgs.selector) {
+    try {
+      const result = await this.webView.webContents.executeJavaScript(
+        buildSourceUrlExtractionScript(this.cliArgs.selector)
+      );
+      const sourceUrls = (typeof result === 'string' ? JSON.parse(result) : []) as string[];
+      this.outputManager.updateSourceUrls(sourceUrls);
+    } catch (error) {
+      console.error('[Main] Error extracting source URLs:', error);
+    }
+  }
 }
 ```
 
@@ -381,7 +391,7 @@ const automationManager = new AutomationManager({
     );
   },
   onUpdateRequested: async () => {
-    await updatePageSource();
+    await updateSourceUrls();
   },
   onCloseRequested: () => {
     // When --close-on-selector-complete is set, check hasPendingSelectorFiles()
