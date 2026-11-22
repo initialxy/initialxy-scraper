@@ -9,7 +9,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.59.x does not support ubuntu-26.04 (the current
+    # ubuntu-latest). Bump together with a Playwright upgrade when supported.
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node-version: [24.x]
