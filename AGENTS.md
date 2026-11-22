@@ -100,7 +100,7 @@ Main Window (1200x1000)              Network Monitor Window (500x600)
 
 - **Single responsibility**: Timer abstractions only
 - **Constructor params**: `waitS`, `scrollIntervalS`, `closeOnIdleTimeS`, `onScrollRequested`, `onUpdateRequested`, `onCloseRequested`
-- **Methods**: `start()` - initializes all timers, `onOutputEvent()` - resets idle timer
+- **Methods**: `start()` - initializes all timers, `onOutputEvent()` - resets idle timer, `startIdleTimer()` (private) - clears any already-armed timer before arming (idempotent; prevents orphaned timers when `start()` arms after output events armed one during its awaited first update)
 - **NO access** to `webView` or `cliArgs` - delegates via callbacks
 - **onScrollRequested**: Returns `Promise<void>` - triggers scroll continuously
 
@@ -126,7 +126,7 @@ Main Window (1200x1000)              Network Monitor Window (500x600)
 | `src/shared/protocol.test.ts` | 31 | Constructor, register, setCallbacks, handleRequest (normal flow, method/headers forwarding, 204 null body), inFlight tracking, cookie handling (get/set, expiration, secure, httponly, samesite, domain, malformed), request ID tracking, response headers forwarding, storeCookies edge cases, getCookiesForUrl error handling |
 | `src/shared/cookie_store.test.ts` | 15 | Constructor, save/load (single + batch), replace by key, expire session cookies, expire past-expiration, domain filtering, deleteByDomain, clear, sameSite handling, cleanup (session + expired), directory creation |
 | `src/shared/output_manager.test.ts` | 28 | Constructor, responseCompleted (immediate processing + buffering), updateSourceUrls (incl. relative-URL normalization), filtering, file writing, curl/ffmpeg command generation, onAllSelectorFilesSaved callback, stable sequence numbering under virtualized scroll (no overwrites, late responses for evicted URLs, cumulative pending state) |
-| `src/shared/automation.test.ts` | 12 | Constructor, start, scroll logic, idle timer, onOutputEvent |
+| `src/shared/automation.test.ts` | 13 | Constructor, start, scroll logic, idle timer, onOutputEvent, orphaned idle timer regression (output events during start's awaited first update) |
 | `src/shared/backend_utils.test.ts` | 17 | normalizeFilename (pathname extraction, root default, no extension, query params, directory structure), normalizeFlatFilename (basename only), generateSequentialFilename (zero-padding, widths, extension preservation), normalizeUrlWithBase (relative resolution, absolute override, error fallback) |
 | `src/shared/cross_stack_utils.test.ts` | 28 | escapeCurl (quotes, backticks, dollar signs, special chars, empty), generateCurl (basic, headers, continuation, escaping, methods), isM3u8 (extension, case-insensitive, query params, edge cases), generateFFmpegCommand (basic, headers, flags, escaping, URL input) |
 
