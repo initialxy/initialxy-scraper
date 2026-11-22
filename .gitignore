@@ -21,6 +21,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# AI coding agent session data
+.pi/
+
 # Logs
 *.log
 npm-debug.log*
