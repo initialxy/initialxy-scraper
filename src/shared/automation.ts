@@ -57,6 +57,14 @@ export class AutomationManager {
   private startIdleTimer(): void {
     if (!this.closeOnIdleTimeS) return;
 
+    // Clear any already-armed timer before arming a new one. Callers such as
+    // start() may arm a timer after output events have already armed one
+    // during the awaited first update; overwriting the field without clearing
+    // would orphan the old timer, which would fire `closeOnIdleTimeS` after
+    // the first flush no matter how active output stays afterwards.
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+    }
     this.idleTimer = setTimeout(this.onCloseRequested, this.closeOnIdleTimeS * MS_IN_S);
   }
 

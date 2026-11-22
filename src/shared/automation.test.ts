@@ -226,6 +226,48 @@ describe('AutomationManager', () => {
     });
   });
 
+  describe('idle timer orphaning', () => {
+    it('should not leave an orphaned idle timer when output events arrive while start() awaits the first update', async () => {
+      let resolveUpdate: () => void = () => {};
+      const update = new Promise<void>((r) => (resolveUpdate = r));
+
+      manager = new AutomationManager({
+        waitS: 0,
+        scrollIntervalS: 0,
+        closeOnIdleTimeS: 10,
+        onScrollRequested: mockOnScrollRequested,
+        onUpdateRequested: () => update,
+        onCloseRequested: mockOnCloseRequested,
+      });
+
+      manager.start();
+
+      // Run start's wait timeout; the callback suspends awaiting onUpdateRequested
+      await vi.advanceTimersByTimeAsync(1);
+
+      // Simulate the buffered-response flush that happens during that await:
+      // each output event arms the idle timer
+      manager.onOutputEvent();
+      manager.onOutputEvent();
+
+      // start() resumes and arms yet another timer - it must clear the previous one
+      resolveUpdate();
+      await vi.advanceTimersByTimeAsync(1);
+
+      // Output keeps flowing
+      vi.advanceTimersByTime(5000);
+      manager.onOutputEvent();
+
+      // t=10s: the pre-fix orphaned timer (armed during the flush) would fire here
+      vi.advanceTimersByTime(5000);
+      expect(mockOnCloseRequested).not.toHaveBeenCalled();
+
+      // t=15s: 10s idle since the last output - the live timer may fire now
+      vi.advanceTimersByTime(5000);
+      expect(mockOnCloseRequested).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('onOutputEvent', () => {
     it('should reset idle timer', async () => {
       manager = new AutomationManager({
