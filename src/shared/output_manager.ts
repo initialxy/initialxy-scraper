@@ -33,7 +33,18 @@ export class OutputManager {
   private onOutput: (url: string) => void;
   private onAllSelectorFilesSaved?: () => void;
   private unprocessedResponses: ResponseData[] = [];
+  /**
+   * Cumulative map: normalized URL -> stable 0-based sequence number.
+   * Sequences are assigned at first sight (DOM order of the extraction that
+   * first contained the URL) and never change. Pages can be recycled by
+   * infinite-scroll virtualization (old elements removed, new ones appended),
+   * so mapping sequence to the URL's position in the *latest* extraction would
+   * overwrite files already saved for evicted pages.
+   * Membership is cumulative too: a response arriving after its element has
+   * scrolled out of the DOM is still eligible.
+   */
   private sourceUrls: Map<string, number> = new Map<string, number>();
+  private nextSequence = 0;
   private savedUrls: Set<string> = new Set<string>();
   private sequentialCounter = 0;
   private baseUrl: string;
@@ -70,18 +81,19 @@ export class OutputManager {
   }
 
   /**
-   * Update the set of expected source URLs, extracted from the live page
-   * (see Coordinator). Each URL is normalized against the base URL and mapped
-   * to its index (compact: only matches that yielded a URL contribute). The
-   * index is used as the sequence number for `--rename-sequence`.
+   * Merge source URLs (extracted from the live page, see Coordinator) into the
+   * cumulative URL->sequence map. Each URL is normalized against the base URL.
+   * New URLs are assigned the next sequence number in DOM order; URLs seen in
+   * previous extractions keep their assigned sequence, so scrolling past a
+   * virtualized list never renumbers (overwrites) already-saved files.
    */
   updateSourceUrls(sourceUrls: string[]): void {
-    const urlMap = new Map<string, number>();
-    sourceUrls.forEach((rawUrl, i) => {
+    for (const rawUrl of sourceUrls) {
       const normalizedUrl = normalizeUrlWithBase(this.baseUrl, rawUrl);
-      urlMap.set(normalizedUrl, i);
-    });
-    this.sourceUrls = urlMap;
+      if (!this.sourceUrls.has(normalizedUrl)) {
+        this.sourceUrls.set(normalizedUrl, this.nextSequence++);
+      }
+    }
 
     if (this.unprocessedResponses.length === 0) {
       return;

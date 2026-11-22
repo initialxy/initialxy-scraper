@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { OutputManager } from './output_manager.ts';
+import fs from 'node:fs';
 
 // Mock fs and path modules to prevent actual file system operations
 vi.mock('node:fs', () => ({
@@ -538,6 +539,111 @@ describe('OutputManager', () => {
       );
 
       expect(manager.hasPendingSelectorFiles()).toBe(false);
+    });
+  });
+
+  describe('stable sequence numbering (virtualized scroll)', () => {
+    const writes = () =>
+      vi
+        .mocked(fs.writeFileSync)
+        .mock.calls.map(([filepath, body]) => [filepath as string, (body as Buffer).toString()]);
+
+    const respond = (m: OutputManager, url: string, body: string) =>
+      m.responseCompleted(
+        { url, method: 'GET', headers: {} },
+        { statusCode: 200, body: Buffer.from(body), headers: {} }
+      );
+
+    it('should keep stable sequences across extractions and not overwrite saved files', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: '.reader__page',
+        outputDir: './output',
+        renameSequence: '03d',
+        onOutput: mockOnOutput,
+      });
+
+      // Initial window: cover, page1, page2
+      manager.updateSourceUrls([
+        'https://cdn.example/cover.jpg',
+        'https://cdn.example/page1.jpg',
+        'https://cdn.example/page2.jpg',
+      ]);
+      respond(manager, 'https://cdn.example/cover.jpg', 'cover');
+      respond(manager, 'https://cdn.example/page1.jpg', 'page1');
+      respond(manager, 'https://cdn.example/page2.jpg', 'page2');
+
+      expect(writes()).toEqual([
+        ['./output/000.jpg', 'cover'],
+        ['./output/001.jpg', 'page1'],
+        ['./output/002.jpg', 'page2'],
+      ]);
+
+      // After scrolling: page1/page2 removed from the DOM, new pages appended
+      manager.updateSourceUrls([
+        'https://cdn.example/cover.jpg',
+        'https://cdn.example/page3.jpg',
+        'https://cdn.example/page4.jpg',
+      ]);
+      respond(manager, 'https://cdn.example/page3.jpg', 'page3');
+      respond(manager, 'https://cdn.example/page4.jpg', 'page4');
+
+      // New pages get the next sequence numbers; already-saved files are
+      // never overwritten
+      expect(writes()).toEqual([
+        ['./output/000.jpg', 'cover'],
+        ['./output/001.jpg', 'page1'],
+        ['./output/002.jpg', 'page2'],
+        ['./output/003.jpg', 'page3'],
+        ['./output/004.jpg', 'page4'],
+      ]);
+    });
+
+    it('should still process responses for URLs that scrolled out of the DOM', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        renameSequence: '03d',
+        onOutput: mockOnOutput,
+      });
+
+      manager.updateSourceUrls(['https://cdn.example/page1.jpg']);
+      // page1 evicted from the DOM before its response arrives
+      manager.updateSourceUrls(['https://cdn.example/page2.jpg']);
+
+      respond(manager, 'https://cdn.example/page1.jpg', 'page1');
+      respond(manager, 'https://cdn.example/page2.jpg', 'page2');
+
+      expect(writes()).toEqual([
+        ['./output/000.jpg', 'page1'],
+        ['./output/001.jpg', 'page2'],
+      ]);
+    });
+
+    it('should keep pending state cumulative across extractions', () => {
+      manager = new OutputManager({
+        baseUrl: 'https://example.com',
+        selector: 'img',
+        outputDir: './output',
+        onOutput: mockOnOutput,
+        onAllSelectorFilesSaved: mockOnAllSelectorFilesSaved,
+      });
+
+      manager.updateSourceUrls(['https://cdn.example/a.jpg', 'https://cdn.example/b.jpg']);
+      respond(manager, 'https://cdn.example/a.jpg', 'a');
+      // b still pending
+      expect(manager.hasPendingSelectorFiles()).toBe(true);
+
+      // a/b evicted from the DOM, c added; b's response then arrives
+      manager.updateSourceUrls(['https://cdn.example/c.jpg']);
+      respond(manager, 'https://cdn.example/b.jpg', 'b');
+      expect(manager.hasPendingSelectorFiles()).toBe(true); // c still pending
+      expect(mockOnAllSelectorFilesSaved).not.toHaveBeenCalled();
+
+      respond(manager, 'https://cdn.example/c.jpg', 'c');
+      expect(manager.hasPendingSelectorFiles()).toBe(false);
+      expect(mockOnAllSelectorFilesSaved).toHaveBeenCalled();
     });
   });
 });
